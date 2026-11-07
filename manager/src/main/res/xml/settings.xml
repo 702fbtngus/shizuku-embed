@@ -25,6 +25,14 @@
             android:defaultValue="false"
             android:title="@string/recovery_watchdog_title"
             android:summary="@string/recovery_watchdog_summary" />
+        <rikka.material.preference.MaterialSwitchPreference
+            android:key="recovery_experiment_enabled"
+            android:defaultValue="false"
+            android:title="@string/recovery_experiment_title"
+            android:summary="@string/recovery_experiment_summary" />
+        <Preference android:key="recovery_experiment_log"
+            android:title="@string/recovery_experiment_log_title"
+            android:summary="@string/recovery_experiment_log_summary" />
         <Preference android:key="recovery_start" android:title="@string/recovery_start_title"
             android:summary="@string/recovery_start_summary" />
         <Preference android:key="recovery_status" android:title="@string/recovery_status_title"

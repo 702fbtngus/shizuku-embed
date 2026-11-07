@@ -1,6 +1,10 @@
 package moe.shizuku.manager.settings
 
 import android.content.ComponentName
+import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.content.SharedPreferences
 import android.text.InputType
@@ -18,6 +22,7 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.preference.*
 import androidx.recyclerview.widget.RecyclerView
 import moe.shizuku.manager.R
@@ -30,6 +35,8 @@ import moe.shizuku.manager.ktx.isComponentEnabled
 import moe.shizuku.manager.ktx.setComponentEnabled
 import moe.shizuku.manager.ktx.toHtml
 import moe.shizuku.manager.receiver.BootCompleteReceiver
+import moe.shizuku.manager.recovery.BackendRecovery
+import moe.shizuku.manager.recovery.ExperimentalWirelessSession
 import moe.shizuku.manager.utils.CustomTabsHelper
 import rikka.core.util.ResourceUtils
 import rikka.material.app.LocaleDelegate
@@ -42,6 +49,18 @@ import moe.shizuku.manager.ShizukuSettings.LANGUAGE as KEY_LANGUAGE
 import moe.shizuku.manager.ShizukuSettings.NIGHT_MODE as KEY_NIGHT_MODE
 
 class SettingsFragment : PreferenceFragmentCompat() {
+
+    private val hotspotPermissionRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            RecoverySettings.prefs.edit().putBoolean(RecoverySettings.EXPERIMENT_ENABLED, true).apply()
+            RecoverySettings.resetExperiment()
+            findPreference<TwoStatePreference>(RecoverySettings.EXPERIMENT_ENABLED)?.isChecked = true
+            RecoveryService.refresh(requireContext())
+        } else {
+            MaterialAlertDialogBuilder(requireContext()).setMessage(R.string.recovery_experiment_permission_denied)
+                .setPositiveButton(android.R.string.ok, null).show()
+        }
+    }
 
     private val statusListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == RecoverySettings.STATUS) updateRecoveryStatus()
@@ -161,6 +180,29 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
     private fun setupRecoveryPreferences() {
         val context = requireContext()
+        val experiment = findPreference<TwoStatePreference>(RecoverySettings.EXPERIMENT_ENABLED)!!
+        experiment.isVisible = Build.VERSION.SDK_INT >= 30
+        experiment.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, value ->
+            if (value == true) {
+                confirmExperiment()
+                false
+            } else {
+                RecoverySettings.prefs.edit().putBoolean(RecoverySettings.EXPERIMENT_ENABLED, false).apply()
+                BackendRecovery.disableExperiment()
+                true
+            }
+        }
+        findPreference<Preference>(RecoverySettings.EXPERIMENT_LOG)!!.setOnPreferenceClickListener {
+            val log = RecoverySettings.prefs.getString(RecoverySettings.EXPERIMENT_LOG,
+                getString(R.string.recovery_experiment_log_empty)).orEmpty()
+            MaterialAlertDialogBuilder(context).setTitle(R.string.recovery_experiment_log_title)
+                .setMessage(log).setPositiveButton(android.R.string.ok, null)
+                .setNeutralButton(android.R.string.copy) { _, _ ->
+                    context.getSystemService(ClipboardManager::class.java)
+                        .setPrimaryClip(ClipData.newPlainText(getString(R.string.recovery_experiment_log_title), log))
+                }.show()
+            true
+        }
         val port = findPreference<EditTextPreference>(RecoverySettings.TCP_PORT)!!
         port.setOnBindEditTextListener { it.inputType = InputType.TYPE_CLASS_NUMBER }
         port.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, value ->
@@ -184,6 +226,29 @@ class SettingsFragment : PreferenceFragmentCompat() {
             updateRecoveryStatus()
             true
         }
+    }
+
+    private fun confirmExperiment() {
+        val context = requireContext()
+        if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) != PackageManager.PERMISSION_GRANTED) {
+            MaterialAlertDialogBuilder(context).setMessage(getString(R.string.recovery_experiment_wss, context.packageName))
+                .setPositiveButton(android.R.string.ok, null).show()
+            return
+        }
+        MaterialAlertDialogBuilder(context).setTitle(R.string.recovery_experiment_title)
+            .setMessage(R.string.recovery_experiment_confirm)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.recovery_experiment_enable) { _, _ ->
+                val permission = ExperimentalWirelessSession.hotspotPermission()
+                if (context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+                    RecoverySettings.prefs.edit().putBoolean(RecoverySettings.EXPERIMENT_ENABLED, true).apply()
+                    RecoverySettings.resetExperiment()
+                    findPreference<TwoStatePreference>(RecoverySettings.EXPERIMENT_ENABLED)!!.isChecked = true
+                    RecoveryService.refresh(context)
+                } else {
+                    hotspotPermissionRequest.launch(permission)
+                }
+            }.show()
     }
 
     private fun updateRecoveryStatus() {

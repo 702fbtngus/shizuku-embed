@@ -57,4 +57,21 @@ class RecoveryPolicyTest {
         assertTrue(RecoveryPolicy.autoAllowed(false, false, true, false))
         assertTrue(RecoveryPolicy.autoAllowed(false, false, false, true))
     }
+
+    @Test fun experimentalStartupRequiresOptInAndNoWifi() {
+        assertFalse(RecoveryPolicy.experimentalAllowed(false, false, true, 0, 0, 100))
+        assertFalse(RecoveryPolicy.experimentalAllowed(true, true, true, 0, 0, 100))
+        assertTrue(RecoveryPolicy.experimentalAllowed(true, false, false, 0, 0, 100))
+    }
+
+    @Test fun automaticOfflineAttemptsRespectCooldownAndFailureLimit() {
+        assertFalse(RecoveryPolicy.experimentalAllowed(true, false, false, 1, 300_000, 299_999))
+        assertTrue(RecoveryPolicy.experimentalAllowed(true, false, false, 1, 300_000, 300_000))
+        assertTrue(RecoveryPolicy.experimentalAllowed(true, false, false, 2, 0, 300_000))
+        assertFalse(RecoveryPolicy.experimentalAllowed(true, false, false, 3, 0, 300_000))
+    }
+
+    @Test fun manualOfflineStartCanRetryAfterAutomaticLimit() {
+        assertTrue(RecoveryPolicy.experimentalAllowed(true, false, true, 3, 999_999, 10))
+    }
 }

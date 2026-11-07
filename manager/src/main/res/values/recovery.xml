@@ -11,4 +11,13 @@
     <string name="recovery_status_title">Recovery status</string>
     <string name="recovery_waiting">No recovery attempt yet. Tap to refresh.</string>
     <string name="recovery_channel">Shizuku backend recovery</string>
+    <string name="recovery_experiment_title">Experimental startup without Wi-Fi</string>
+    <string name="recovery_experiment_summary">Try a temporary local-only hotspot and wireless debugging when no Wi-Fi network is connected. Requires ADB pairing, WRITE_SECURE_SETTINGS and a hotspot permission. Device support varies.</string>
+    <string name="recovery_experiment_confirm">This requests a temporary local-only hotspot and repeatedly asks Android to enable wireless debugging for up to 120 seconds. It can affect Wi-Fi and hotspot operation. Android or the manufacturer may refuse the attempt.\n\nAllow Nearby devices on Android 13 or later, or precise Location on Android 11–12. Location services may also be needed on those older versions.\n\nEnable TCP on start for later offline restarts. Boot recovery requires Start on boot and the first device unlock. Automatic offline attempts are limited to three, with at least five minutes between failed attempts. A manual start retries immediately.</string>
+    <string name="recovery_experiment_enable">Enable</string>
+    <string name="recovery_experiment_wss">Grant WRITE_SECURE_SETTINGS through ADB first, then enable this option.\n\nadb shell pm grant %1$s android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="recovery_experiment_permission_denied">Hotspot permission was denied. Allow Nearby devices (Android 13+) or precise Location (Android 11–12) in app permissions, then enable this option again.</string>
+    <string name="recovery_experiment_log_title">Offline startup diagnostics</string>
+    <string name="recovery_experiment_log_summary">View or copy the last experimental attempt.</string>
+    <string name="recovery_experiment_log_empty">No experimental attempt recorded yet.</string>
 </resources>

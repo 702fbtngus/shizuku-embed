@@ -15,9 +15,25 @@ internal object RecoverySettings {
     const val PAUSED = "recovery_paused"
     const val BOOT_PENDING = "recovery_boot_pending"
     const val STATUS = "recovery_status"
+    const val EXPERIMENT_ENABLED = "recovery_experiment_enabled"
+    const val EXPERIMENT_LOG = "recovery_experiment_log"
+    private const val EXPERIMENT_FAILURES = "recovery_experiment_failures"
+    private const val EXPERIMENT_RETRY_AT = "recovery_experiment_retry_at"
 
     val prefs get() = ShizukuSettings.getPreferences()
     val tcpEnabled get() = prefs.getBoolean(TCP_ENABLED, false)
+    val experimentEnabled get() = prefs.getBoolean(EXPERIMENT_ENABLED, false)
+    val experimentFailures get() = prefs.getInt(EXPERIMENT_FAILURES, 0)
+    val experimentRetryAt get() = prefs.getLong(EXPERIMENT_RETRY_AT, 0)
+
+    fun resetExperiment() {
+        prefs.edit().putInt(EXPERIMENT_FAILURES, 0).putLong(EXPERIMENT_RETRY_AT, 0).apply()
+    }
+
+    fun failedExperiment(now: Long) {
+        prefs.edit().putInt(EXPERIMENT_FAILURES, experimentFailures + 1)
+            .putLong(EXPERIMENT_RETRY_AT, now + RecoveryPolicy.EXPERIMENT_COOLDOWN_MS).apply()
+    }
     val port get() = prefs.getString(TCP_PORT, "5555")?.toIntOrNull()
         ?.takeIf(RecoveryPolicy::validPort) ?: RecoveryPolicy.DEFAULT_TCP_PORT
     val watchdog get() = prefs.getBoolean(WATCHDOG, false)
@@ -40,6 +56,7 @@ internal object RecoverySettings {
             val enabled = startOnBoot && ShizukuSettings.getLastLaunchMode() != ShizukuSettings.LaunchMethod.UNKNOWN
             editor.putBoolean(STOPPED, !enabled).putBoolean(BOOT_PENDING, enabled)
                 .putBoolean(PAUSED, false)
+                .putInt(EXPERIMENT_FAILURES, 0).putLong(EXPERIMENT_RETRY_AT, 0)
         }
         editor.apply()
     }

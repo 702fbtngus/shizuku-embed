@@ -50,6 +50,12 @@ declared = [node.get(ns+'name', '') for node in manifest
 assert not any(name.startswith('moe.shizuku.manager.permission') for name in declared)
 assert host + '.shizuku.permission.MANAGER' in declared
 assert 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' in declared
+assert 'android.permission.CHANGE_WIFI_STATE' in declared
+assert 'android.permission.NEARBY_WIFI_DEVICES' in declared
+location = next(node for node in manifest.findall('uses-permission')
+                if node.get(ns+'name') == 'android.permission.ACCESS_FINE_LOCATION')
+assert location.get(ns+'maxSdkVersion') == '32'
+
 assert not manifest.findall('.//category[@'+ns+'name="android.intent.category.LAUNCHER"]')
 with zipfile.ZipFile(apk) as archive:
     names = set(archive.namelist())

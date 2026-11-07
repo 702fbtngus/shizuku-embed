@@ -112,6 +112,12 @@ were adapted from [Shizuku Next v14.0.33-next](https://github.com/rushiranpise/S
 See the bundled Next attribution. The embedded manager retains the original UI
 and API revision. Test startup/recovery on each consuming app and actual device.
 
+The separate **Experimental startup without Wi-Fi** option uses a temporary
+local-only hotspot and bounded wireless-debugging requests when no ADB endpoint
+or Wi-Fi connection exists. It includes runtime permission consent, cancellation
+cleanup and local diagnostics. It is off by default and device-dependent. See the
+[experimental startup guide](EMBEDDING.md#experimental-startup-without-wi-fi).
+
 ## Upstream and license
 
 - [Original project](https://github.com/RikkaApps/Shizuku)

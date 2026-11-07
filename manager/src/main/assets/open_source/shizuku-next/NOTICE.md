@@ -14,3 +14,8 @@ adb/AdbStarter.kt, start/StartTransport.kt, service/StartCircuitBreaker.kt and
 worker/AdbStartWorker.kt. The embed implementation retains the existing manager
 and uses its own isolated foreground service and Android JobScheduler backstop.
 It retains the nested Shizuku API revision recorded by the embedding repository.
+
+Experimental offline startup additionally adapts ForcedWirelessDebugging.kt from
+revision 35d46fb8dbada23960a9818fa957c8c3f283124a. The embed implementation adds
+cancellation-safe hotspot ownership, bounded automatic attempts, runtime
+permission consent and a local diagnostics view. Its API submodule is unchanged.

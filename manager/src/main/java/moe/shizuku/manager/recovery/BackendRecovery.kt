@@ -2,13 +2,15 @@ package moe.shizuku.manager.recovery
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.SystemProperties
 import android.os.Build
 import android.os.SystemClock
 import android.os.UserManager
 import android.provider.Settings
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,7 +19,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.withTimeoutOrNull
 import moe.shizuku.manager.ShizukuSettings
 import moe.shizuku.manager.adb.AdbAuthorizationException
 import moe.shizuku.manager.adb.AdbClient
@@ -33,6 +34,7 @@ import java.io.EOFException
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketException
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.SSLHandshakeException
 
@@ -42,6 +44,7 @@ object BackendRecovery {
     private val mutex = Mutex()
     private val generation = AtomicLong()
     @Volatile private var activeClient: AdbClient? = null
+    @Volatile private var activeExperiment: ExperimentalWirelessSession? = null
     @Volatile private var stopLateBinderUntil = 0L
     private var nextAttempt = 0L
     private var failures = 0
@@ -93,6 +96,7 @@ object BackendRecovery {
         failures = 0
         startFailures = 0
         nextAttempt = 0
+        RecoverySettings.resetExperiment()
         RecoverySettings.status("Running as ${if (uid == 0) "root" else "shell"}.")
     }
 
@@ -101,6 +105,7 @@ object BackendRecovery {
             .putBoolean(RecoverySettings.BOOT_PENDING, false).apply()
         if (mutex.isLocked) stopLateBinderUntil = SystemClock.elapsedRealtime() + 30_000
         generation.incrementAndGet()
+        activeExperiment?.cancel()
         activeClient?.close()
         RecoverySettings.status("Stopped by user. Start manually to resume recovery.")
         RecoveryService.refresh(application)
@@ -110,9 +115,18 @@ object BackendRecovery {
         }
     }
 
+    fun disableExperiment() {
+        if (activeExperiment != null) {
+            generation.incrementAndGet()
+            activeExperiment?.cancel()
+            activeClient?.close()
+        }
+    }
+
     suspend fun startManual(root: Boolean, host: String? = null, port: Int = 0,
                             output: (String) -> Unit) {
         val ticket = generation.incrementAndGet()
+        activeExperiment?.cancel()
         activeClient?.close()
         mutex.lock()
         try {
@@ -123,6 +137,7 @@ object BackendRecovery {
             startFailures = 0
             failures = 0
             nextAttempt = 0
+            RecoverySettings.resetExperiment()
             start(root, host, port, true, ticket, output)
         } catch (e: CancellationException) {
             throw e
@@ -159,7 +174,7 @@ object BackendRecovery {
             } catch (e: Exception) {
                 if (ticket != generation.get()) return
                 val authorization = e is AdbAuthorizationException || e is SSLHandshakeException ||
-                    e is AdbKeyException || e is RootUnavailableException
+                    e is AdbKeyException || e is RootUnavailableException || e is ExperimentalPermissionException
                 if (e is ServerStartException) startFailures += 1
                 if (authorization || startFailures >= 3) {
                     RecoverySettings.prefs.edit().putBoolean(RecoverySettings.PAUSED, true).apply()
@@ -177,6 +192,24 @@ object BackendRecovery {
 
     private suspend fun start(root: Boolean, host: String?, port: Int, manual: Boolean,
                               ticket: Long, output: (String) -> Unit) {
+        try {
+            startServer(root, host, port, manual, ticket, output)
+            activeExperiment?.record("Service binder received.")
+        } catch (e: CancellationException) {
+            activeExperiment?.record("Attempt cancelled.")
+            throw e
+        } catch (e: Exception) {
+            activeExperiment?.record("Attempt failed. ${e.javaClass.simpleName}: ${e.message}")
+            if (activeExperiment != null) RecoverySettings.failedExperiment(SystemClock.elapsedRealtime())
+            throw e
+        } finally {
+            withContext(NonCancellable) { activeExperiment?.close() }
+            activeExperiment = null
+        }
+    }
+
+    private suspend fun startServer(root: Boolean, host: String?, port: Int, manual: Boolean,
+                                    ticket: Long, output: (String) -> Unit) {
         if (!root && !application.getSystemService(UserManager::class.java).isUserUnlocked) {
             error("Unlock the device once before restoring the ADB key.")
         }
@@ -202,6 +235,8 @@ object BackendRecovery {
             try {
                 if (RecoverySettings.tcpEnabled && (client.isTls || RecoverySettings.prefs.getInt("recovery_last_port", -1) != RecoverySettings.port)) {
                     val tcpPort = RecoverySettings.port
+                    activeExperiment?.stopNudging()
+                    activeExperiment?.record("Switching adbd to TCP port $tcpPort.")
                     output("Enabling authenticated ADB TCP on port $tcpPort…")
                     // adbd restarts here. Enable TCP before starting the privileged server.
                     try {
@@ -268,23 +303,62 @@ object BackendRecovery {
             }
         }
         if (Build.VERSION.SDK_INT < 30) error("No local ADB endpoint. Enable ADB TCP from a computer first.")
+        val wifiConnected = ExperimentalWirelessSession.hasWifiConnection(application)
+        val offline = RecoverySettings.experimentEnabled && !wifiConnected
+        val experimentAllowed = RecoveryPolicy.experimentalAllowed(RecoverySettings.experimentEnabled,
+            wifiConnected, manual, RecoverySettings.experimentFailures, RecoverySettings.experimentRetryAt,
+            SystemClock.elapsedRealtime())
+        if (experimentAllowed) {
+            val experiment = ExperimentalWirelessSession(application)
+            activeExperiment = experiment
+            experiment.prepare(output)
+        }
+        checkCurrent(ticket)
         if (application.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED) {
             val resolver = application.contentResolver
             Settings.Global.putInt(resolver, Settings.Global.ADB_ENABLED, 1)
             Settings.Global.putInt(resolver, "adb_wifi_enabled", 1)
         }
-        output("Waiting for wireless debugging. Connect Wi-Fi and enable wireless debugging if needed…")
-        val found = CompletableDeferred<Int>()
+        if (!experimentAllowed) output("Waiting for wireless debugging. Connect Wi-Fi and enable wireless debugging if needed.")
+        val discoveredPort = AtomicInteger(-1)
         val mdns = AdbMdns(application, AdbMdns.TLS_CONNECT) {
-            if (RecoveryPolicy.validPort(it)) found.complete(it)
+            if (RecoveryPolicy.validPort(it)) discoveredPort.set(it)
         }
-        val discovered = try {
+        val window = if (experimentAllowed) RecoveryPolicy.EXPERIMENT_WINDOW_MS else 8_000L
+        val deadline = SystemClock.elapsedRealtime() + window
+        var lastFailure: String? = null
+        try {
+            // Start discovery after the temporary interface has settled.
             mdns.start()
-            withTimeoutOrNull(8_000) { found.await() }
+            while (SystemClock.elapsedRealtime() < deadline) {
+                checkCurrent(ticket)
+                activeExperiment?.writeFailure?.let { throw ExperimentalPermissionException(it) }
+                val direct = SystemProperties.getInt("service.adb.tls.port", -1)
+                val candidates = listOf(direct, discoveredPort.get()).filter(RecoveryPolicy::validPort).distinct()
+                for (candidate in candidates) {
+                    if (!listening(candidate)) continue
+                    try {
+                        val client = open(key, "127.0.0.1", candidate, manual, ticket)
+                        activeExperiment?.record("Authenticated ADB endpoint on port $candidate.")
+                        return client
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: AdbAuthorizationException) {
+                        throw e
+                    } catch (e: SSLHandshakeException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Android can close the experimental TLS endpoint while a handshake is in flight.
+                        lastFailure = "${e.javaClass.simpleName}: ${e.message}"
+                    }
+                }
+                delay(125)
+            }
         } finally { runCatching { mdns.stop() } }
         checkCurrent(ticket)
-        if (discovered == null) error("No ADB endpoint. Waiting for Wi-Fi / wireless debugging.")
-        return open(key, "127.0.0.1", discovered, manual, ticket)
+        if (experimentAllowed) error("Offline startup timed out. Android may require a Wi-Fi connection. Last connection failure=$lastFailure")
+        if (offline) error("No ADB endpoint. Offline experiment is cooling down or reached its three-attempt limit. Connect Wi-Fi or start manually.")
+        error("No ADB endpoint. Waiting for Wi-Fi / wireless debugging.")
     }
 
     private suspend fun open(key: AdbKey, host: String, port: Int, manual: Boolean, ticket: Long): AdbClient {

@@ -65,7 +65,8 @@ class StartWirelessAdbViewHolder(binding: HomeStartWirelessAdbBinding, root: Vie
     }
 
     private fun onAdbClicked(context: Context) {
-        if (moe.shizuku.manager.recovery.RecoverySettings.tcpEnabled) {
+        if (moe.shizuku.manager.recovery.RecoverySettings.tcpEnabled ||
+            moe.shizuku.manager.recovery.RecoverySettings.experimentEnabled) {
             context.startActivity(Intent(context, StarterActivity::class.java)
                 .putExtra(StarterActivity.EXTRA_IS_ROOT, false))
             return

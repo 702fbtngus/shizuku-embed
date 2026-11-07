@@ -189,3 +189,44 @@ across every reboot. The first device unlock is required to decrypt the ADB key.
 
 Compilation and APK checks validate packaging. Offline restart, daemon behavior,
 battery settings and boot timing require physical-device verification.
+
+## Experimental startup without Wi-Fi
+
+The native manager Settings > Startup has an opt-in **Experimental startup
+without Wi-Fi** switch. It is off by default and requires Android 11+, existing
+ADB pairing, WRITE_SECURE_SETTINGS, and a runtime hotspot permission. The switch
+shows an explanation before requesting Nearby Wi-Fi devices on Android 13+ or
+precise Location on Android 11?12. Older devices may also require location
+services to be on. The library declares CHANGE_WIFI_STATE, NEARBY_WIFI_DEVICES
+with neverForLocation, and ACCESS_FINE_LOCATION with maxSdkVersion 32.
+
+After known ADB candidates fail and no Wi-Fi network is connected, the experiment
+requests a local-only hotspot for an interface, then repeatedly asks Android to
+enable wireless debugging when the system has turned it off. The hotspot request
+has a 12-second timeout. ADB discovery has a 120-second window with bounded socket
+timeouts. It probes the current TLS property and mDNS-discovered local ports.
+The authenticated connection starts the same backend and verifies its binder.
+
+When Enable TCP on start is selected, the repeated writes stop before switching
+adbd to its TCP port. The hotspot reservation stays owned through server startup
+and is released on success, failure, cancellation, Stop, or option disable. A
+reservation delivered after cancellation is immediately closed. The experiment
+can affect local Wi-Fi/hotspot operation while running. Android or OEM policy may
+refuse it, particularly on Android 17. It does not establish reboot persistence.
+
+Automatic failed experiments have a five-minute cooldown and stop after three
+failures until a successful start, a new boot or a manual start resets the count.
+Normal Wi-Fi recovery can continue after that limit. Existing manual-stop policy
+applies. Boot recovery waits for the first device unlock to decrypt the ADB key.
+
+**Offline startup diagnostics** displays and copies the last attempt, including
+hotspot refusal, timing, setting-write count, endpoint discovery and connection
+failure. It stores a bounded local log without Wi-Fi credentials or pairing keys.
+
+Test option consent and denied/revoked permissions, first pairing, Wi-Fi off
+manual startup, Wi-Fi off reboot after first unlock, hotspot refusal/timeout,
+late callbacks, cancellation/Stop/disable during startup, failed-attempt limits,
+Wi-Fi reconnection, and actual terminal shell output. Repeat on Samsung and Xiaomi
+and verify existing guards during attempts. Build checks validate packaging and
+policy/resource ownership. Device support and offline boot success require
+physical-device tests.
