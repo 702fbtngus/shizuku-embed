@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recovery_tcp_title">Enable TCP on start</string>
+    <string name="recovery_tcp_summary">Keep an authenticated ADB TCP listener for restarts without Wi-Fi during this boot. The listener may be reachable from connected networks. Applies on the next start. Turning this off stops future activation. An existing listener remains until ADB restarts.</string>
+    <string name="recovery_port_title">ADB TCP port (1–65535)</string>
+    <string name="recovery_port_invalid">Enter a port from 1 to 65535.</string>
+    <string name="recovery_watchdog_title">Watchdog</string>
+    <string name="recovery_watchdog_summary">Monitor the backend and retry when it stops, with an ongoing notification. Start manually once to resume after Stop. Boot recovery also requires Start on boot. Pairing, a usable ADB endpoint and manufacturer background settings still apply.</string>
+    <string name="recovery_start_title">Start / restart Shizuku</string>
+    <string name="recovery_start_summary">Reuse local ADB TCP first, then wireless debugging. Enable TCP on start while Wi-Fi is available before trying offline restarts. A reboot may require Wi-Fi again.</string>
+    <string name="recovery_status_title">Recovery status</string>
+    <string name="recovery_waiting">No recovery attempt yet. Tap to refresh.</string>
+    <string name="recovery_channel">Shizuku backend recovery</string>
+</resources>

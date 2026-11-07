@@ -10,6 +10,26 @@
             android:summary="@string/settings_start_on_boot_summary"
             android:title="@string/settings_start_on_boot" />
 
+        <rikka.material.preference.MaterialSwitchPreference
+            android:key="recovery_tcp_enabled"
+            android:defaultValue="false"
+            android:title="@string/recovery_tcp_title"
+            android:summary="@string/recovery_tcp_summary" />
+        <EditTextPreference
+            android:key="recovery_tcp_port"
+            android:defaultValue="5555"
+            android:title="@string/recovery_port_title"
+            android:summary="%s" />
+        <rikka.material.preference.MaterialSwitchPreference
+            android:key="recovery_watchdog"
+            android:defaultValue="false"
+            android:title="@string/recovery_watchdog_title"
+            android:summary="@string/recovery_watchdog_summary" />
+        <Preference android:key="recovery_start" android:title="@string/recovery_start_title"
+            android:summary="@string/recovery_start_summary" />
+        <Preference android:key="recovery_status" android:title="@string/recovery_status_title"
+            android:summary="@string/recovery_waiting" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/settings_language">

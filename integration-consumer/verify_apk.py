@@ -37,10 +37,18 @@ assert provider.get(ns+'authorities') == host + '.shizuku'
 init = components['moe.shizuku.manager.integration.ShizukuInitProvider']
 assert init.get(ns+'exported') == 'false'
 assert init.get(ns+'initOrder') == '100'
+recovery = components['moe.shizuku.manager.recovery.RecoveryService']
+assert recovery.get(ns+'exported') == 'false'
+assert recovery.get(ns+'directBootAware') == 'true'
+assert recovery.get(ns+'foregroundServiceType') == 'specialUse'
+backstop = components['moe.shizuku.manager.recovery.RecoveryJobService']
+assert backstop.get(ns+'permission') == 'android.permission.BIND_JOB_SERVICE'
+assert backstop.get(ns+'directBootAware') == 'true'
 declared = [node.get(ns+'name', '') for node in manifest
             if node.tag in {'permission', 'permission-group', 'uses-permission'}]
 assert not any(name.startswith('moe.shizuku.manager.permission') for name in declared)
 assert host + '.shizuku.permission.MANAGER' in declared
+assert 'android.permission.FOREGROUND_SERVICE_SPECIAL_USE' in declared
 assert not manifest.findall('.//category[@'+ns+'name="android.intent.category.LAUNCHER"]')
 with zipfile.ZipFile(apk) as archive:
     names = set(archive.namelist())

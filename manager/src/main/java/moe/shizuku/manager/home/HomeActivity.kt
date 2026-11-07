@@ -52,7 +52,7 @@ abstract class HomeActivity : AppBarActivity() {
             if (it.status == Status.SUCCESS) {
                 val status = homeModel.serviceStatus.value?.data ?: return@observe
                 adapter.updateData()
-                ShizukuSettings.setLastLaunchMode(if (status.uid == 0) ShizukuSettings.LaunchMethod.ROOT else ShizukuSettings.LaunchMethod.ADB)
+                if (status.isRunning) ShizukuSettings.setLastLaunchMode(if (status.uid == 0) ShizukuSettings.LaunchMethod.ROOT else ShizukuSettings.LaunchMethod.ADB)
             }
         }
         appsModel.grantedCount.observe(this) {
@@ -121,10 +121,7 @@ abstract class HomeActivity : AppBarActivity() {
                 MaterialAlertDialogBuilder(this)
                     .setMessage(R.string.dialog_stop_message)
                     .setPositiveButton(android.R.string.ok) { _: DialogInterface?, _: Int ->
-                        try {
-                            Shizuku.exit()
-                        } catch (e: Throwable) {
-                        }
+                        moe.shizuku.manager.recovery.BackendRecovery.stop()
                     }
                     .setNegativeButton(android.R.string.cancel, null)
                     .show()

@@ -56,7 +56,7 @@ jobs:
       - name: Compile original manager and server
         run: |
           ./gradlew --no-daemon --stacktrace -Pandroid.sdk.channel=3 \
-            :manager:assembleDebug 2>&1 | tee "$RUNNER_TEMP/shizuku-baseline.log"
+            :manager:testDebugUnitTest :manager:assembleDebug 2>&1 | tee "$RUNNER_TEMP/shizuku-baseline.log"
 
       - name: Verify host identity configuration
         run: python3 -m unittest discover -s integration-consumer -p test_embedding_config.py

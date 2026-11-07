@@ -87,6 +87,31 @@ entry paths for its threat model. Legacy external rish entry points are disabled
 Compatibility with existing third-party clients of the official Shizuku app
 requires separate integration work.
 
+## Optional startup recovery
+
+The original manager settings now include **Enable TCP on start**, a TCP port,
+**Watchdog**, **Start / restart Shizuku** and **Recovery status**. TCP and watchdog
+are off by default. After pairing, enable TCP and explicitly start again while
+wireless debugging works. The ADB daemon switches to the selected TCP port
+before starting the backend. Later starts try a verified local socket first.
+
+TCP can support offline restarts during the same boot. It may expose an
+authenticated ADB listener to connected networks. Disabling the preference stops
+future activation. An existing listener remains until ADB restarts. Rebooting
+can clear the listener and require Wi-Fi/wireless debugging again.
+
+Start on boot retries missing endpoints with backoff. The opt-in foreground
+watchdog checks server health, while a persisted 15-minute-minimum Android job
+backs up process loss. Manufacturer restrictions and Android scheduling still
+apply. Stop suspends recovery until a manual start, or the next boot when Start
+on boot is enabled. Authentication failures and repeated starter failures pause
+automatic attempts and appear in Recovery status.
+
+The transport ordering, TCP-before-starter sequence and recovery failure handling
+were adapted from [Shizuku Next v14.0.33-next](https://github.com/rushiranpise/Shizuku-Next/tree/8508e1d50a293cec82eb60465bcc17022d7a5926).
+See the bundled Next attribution. The embedded manager retains the original UI
+and API revision. Test startup/recovery on each consuming app and actual device.
+
 ## Upstream and license
 
 - [Original project](https://github.com/RikkaApps/Shizuku)

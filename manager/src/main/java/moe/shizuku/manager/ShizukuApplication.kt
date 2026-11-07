@@ -34,6 +34,7 @@ class ShizukuApplication : Application() {
             ShizukuSettings.initialize(host)
             LocaleDelegate.defaultLocale = ShizukuSettings.getLocale()
             AppCompatDelegate.setDefaultNightMode(ShizukuSettings.getNightMode())
+            moe.shizuku.manager.recovery.BackendRecovery.initialize()
         }
     }
 

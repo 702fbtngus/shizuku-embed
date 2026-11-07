@@ -149,3 +149,43 @@ Keep upstream `master` as the comparison point and merge upstream changes into
 `main` deliberately. Verify standalone and embedded builds before consumers
 advance their pinned commit. Preserve source attribution and the bundled
 upstream README/license assets during updates.
+
+## Backend recovery
+
+Recovery runs in the same isolated manager process. The foreground service uses
+`specialUse` with an explanatory subtype. A persisted JobScheduler backstop
+reserves job ID `0x53485A4B` in the host UID. Keep this ID available in the host.
+Notification taps launch the host application through its normal launcher entry.
+
+Configure the options in the embedded manager Settings > Startup. TCP and
+Watchdog default to off. Start on boot preserves the existing receiver-component
+setting. A manual Stop cancels pending starts and suppresses recovery for this
+boot until the user explicitly starts again. With Start on boot enabled, a new
+boot arms recovery again. Without it, a persisted job cannot start the server
+on the next boot. Cached TLS ports expire at reboot. TCP candidates are probed
+and authenticated rather than trusting an old system property.
+
+Automatic recovery needs an already authorized endpoint or a working paired
+wireless-debugging connection. WRITE_SECURE_SETTINGS can request wireless
+debugging, subject to Android and OEM policy. It cannot preserve a TCP listener
+across every reboot. The first device unlock is required to decrypt the ADB key.
+
+### Device verification
+
+1. Pair and start normally, confirm shell UID 2000 (or deliberately selected root).
+2. Enable TCP on start, choose an unused port, and use Start / restart Shizuku.
+   Confirm the terminal responds after disabling Wi-Fi and wireless debugging.
+3. Stop manually. Leave the manager and wait. The watchdog must stay stopped.
+   Manually start offline and verify the existing authenticated TCP endpoint.
+4. Enable Watchdog, then terminate only the backend process from an authorized
+   shell. Confirm one recovery attempt, a live binder and actual shell output.
+5. Reboot with Start on boot enabled. Unlock once, connect Wi-Fi if needed, and
+   verify retry status followed by shell output. Repeat with Start on boot off.
+6. Remove pairing authorization. Automatic recovery must pause with a readable
+   status. Pair again and manually start to resume. Check notification taps,
+   host authentication, guard responsiveness, updates and existing root startup.
+7. Repeat after process loss and battery-management restrictions on Samsung and
+   Xiaomi separately. Job timing is controlled by Android and may be delayed.
+
+Compilation and APK checks validate packaging. Offline restart, daemon behavior,
+battery settings and boot timing require physical-device verification.

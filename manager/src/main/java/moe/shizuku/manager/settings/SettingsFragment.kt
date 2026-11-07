@@ -1,6 +1,14 @@
 package moe.shizuku.manager.settings
 
 import android.content.ComponentName
+import android.content.Intent
+import android.content.SharedPreferences
+import android.text.InputType
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import moe.shizuku.manager.recovery.RecoveryPolicy
+import moe.shizuku.manager.recovery.RecoverySettings
+import moe.shizuku.manager.recovery.RecoveryService
+import moe.shizuku.manager.starter.StarterActivity
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
@@ -35,6 +43,10 @@ import moe.shizuku.manager.ShizukuSettings.NIGHT_MODE as KEY_NIGHT_MODE
 
 class SettingsFragment : PreferenceFragmentCompat() {
 
+    private val statusListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == RecoverySettings.STATUS) updateRecoveryStatus()
+    }
+
     private lateinit var languagePreference: ListPreference
     private lateinit var nightModePreference: IntegerSimpleMenuPreference
     private lateinit var blackNightThemePreference: TwoStatePreference
@@ -68,7 +80,13 @@ class SettingsFragment : PreferenceFragmentCompat() {
             Preference.OnPreferenceChangeListener { _: Preference?, newValue: Any ->
                 if (newValue is Boolean) {
                     context.packageManager.setComponentEnabled(componentName, newValue)
-                    context.packageManager.isComponentEnabled(componentName) == newValue
+                    val accepted = context.packageManager.isComponentEnabled(componentName) == newValue
+                    if (accepted) {
+                        RecoverySettings.prefs.edit().putBoolean(KEEP_START_ON_BOOT, newValue).apply()
+                        if (!newValue) RecoverySettings.prefs.edit().putBoolean(RecoverySettings.BOOT_PENDING, false).apply()
+                        RecoveryService.refresh(context)
+                    }
+                    accepted
                 } else false
             }
         languagePreference.onPreferenceChangeListener =
@@ -85,6 +103,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
                 true
             }
 
+        setupRecoveryPreferences()
         setupLocalePreference()
 
         nightModePreference.value = ShizukuSettings.getNightMode()
@@ -138,6 +157,49 @@ class SettingsFragment : PreferenceFragmentCompat() {
         } else {
             translationContributorsPreference.isVisible = false
         }
+    }
+
+    private fun setupRecoveryPreferences() {
+        val context = requireContext()
+        val port = findPreference<EditTextPreference>(RecoverySettings.TCP_PORT)!!
+        port.setOnBindEditTextListener { it.inputType = InputType.TYPE_CLASS_NUMBER }
+        port.onPreferenceChangeListener = Preference.OnPreferenceChangeListener { _, value ->
+            val valid = (value as? String)?.toIntOrNull()?.let(RecoveryPolicy::validPort) == true
+            if (!valid) MaterialAlertDialogBuilder(context)
+                .setMessage(R.string.recovery_port_invalid).setPositiveButton(android.R.string.ok, null).show()
+            valid
+        }
+        findPreference<TwoStatePreference>(RecoverySettings.WATCHDOG)!!.onPreferenceChangeListener =
+            Preference.OnPreferenceChangeListener { _, value ->
+                RecoverySettings.prefs.edit().putBoolean(RecoverySettings.WATCHDOG, value as Boolean).apply()
+                RecoveryService.refresh(context)
+                true
+            }
+        findPreference<Preference>("recovery_start")!!.setOnPreferenceClickListener {
+            startActivity(Intent(context, StarterActivity::class.java)
+                .putExtra(StarterActivity.EXTRA_RECOVERY, true))
+            true
+        }
+        findPreference<Preference>(RecoverySettings.STATUS)!!.setOnPreferenceClickListener {
+            updateRecoveryStatus()
+            true
+        }
+    }
+
+    private fun updateRecoveryStatus() {
+        findPreference<Preference>(RecoverySettings.STATUS)?.summary =
+            RecoverySettings.prefs.getString(RecoverySettings.STATUS, getString(R.string.recovery_waiting))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        RecoverySettings.prefs.registerOnSharedPreferenceChangeListener(statusListener)
+        updateRecoveryStatus()
+    }
+
+    override fun onPause() {
+        RecoverySettings.prefs.unregisterOnSharedPreferenceChangeListener(statusListener)
+        super.onPause()
     }
 
     override fun onCreateRecyclerView(

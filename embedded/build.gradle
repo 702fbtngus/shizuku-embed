@@ -39,6 +39,7 @@ apply from: rootProject.file('manager/module.gradle')
 
 android {
     sourceSets {
+        test.java.srcDirs += [rootProject.file('manager/src/test/java')]
         main {
             java.srcDirs += [rootProject.file('manager/src/main/java')]
             java.srcDir(localeOutput)

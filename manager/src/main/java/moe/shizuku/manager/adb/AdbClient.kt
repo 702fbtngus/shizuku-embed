@@ -20,13 +20,20 @@ import java.io.Closeable
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.net.Socket
+import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.net.ssl.SSLSocket
 
 private const val TAG = "AdbClient"
 
-class AdbClient(private val host: String, private val port: Int, private val key: AdbKey) : Closeable {
+class AdbClient(
+    private val host: String,
+    private val port: Int,
+    private val key: AdbKey,
+    private val timeoutMs: Int = 15_000,
+    private val allowAuthorizationPrompt: Boolean = true
+) : Closeable {
 
     private lateinit var socket: Socket
     private lateinit var plainInputStream: DataInputStream
@@ -41,8 +48,12 @@ class AdbClient(private val host: String, private val port: Int, private val key
     private val inputStream get() = if (useTls) tlsInputStream else plainInputStream
     private val outputStream get() = if (useTls) tlsOutputStream else plainOutputStream
 
+    val isTls get() = useTls
+
     fun connect() {
-        socket = Socket(host, port)
+        socket = Socket()
+        socket.connect(InetSocketAddress(host, port), timeoutMs)
+        socket.soTimeout = timeoutMs
         socket.tcpNoDelay = true
         plainInputStream = DataInputStream(socket.getInputStream())
         plainOutputStream = DataOutputStream(socket.getOutputStream())
@@ -58,6 +69,7 @@ class AdbClient(private val host: String, private val port: Int, private val key
 
             val sslContext = key.sslContext
             tlsSocket = sslContext.socketFactory.createSocket(socket, host, port, true) as SSLSocket
+            tlsSocket.soTimeout = timeoutMs
             tlsSocket.startHandshake()
             Log.d(TAG, "Handshake succeeded.")
 
@@ -67,11 +79,12 @@ class AdbClient(private val host: String, private val port: Int, private val key
 
             message = read()
         } else if (message.command == A_AUTH) {
-            if (message.command != A_AUTH && message.arg0 != ADB_AUTH_TOKEN) error("not A_AUTH ADB_AUTH_TOKEN")
+            if (message.arg0 != ADB_AUTH_TOKEN) error("not A_AUTH ADB_AUTH_TOKEN")
             write(A_AUTH, ADB_AUTH_SIGNATURE, 0, key.sign(message.data))
 
             message = read()
             if (message.command != A_CNXN) {
+                if (!allowAuthorizationPrompt) throw AdbAuthorizationException()
                 write(A_AUTH, ADB_AUTH_RSAPUBLICKEY, 0, key.adbPublicKey)
                 message = read()
             }
@@ -81,8 +94,13 @@ class AdbClient(private val host: String, private val port: Int, private val key
     }
 
     fun shellCommand(command: String, listener: ((ByteArray) -> Unit)?) {
+        command("shell:$command", listener)
+    }
+
+    // ADB services also include tcpip:<port>. Adapted from Shizuku Next.
+    fun command(service: String, listener: ((ByteArray) -> Unit)? = null) {
         val localId = 1
-        write(A_OPEN, localId, 0, "shell:$command")
+        write(A_OPEN, localId, 0, service)
 
         var message = read()
         when (message.command) {
@@ -134,6 +152,7 @@ class AdbClient(private val host: String, private val port: Int, private val key
         val dataLength = buffer.int
         val checksum = buffer.int
         val magic = buffer.int
+        require(dataLength in 0..A_MAXDATA) { "Invalid ADB payload length" }
         val data: ByteArray?
         if (dataLength >= 0) {
             data = ByteArray(dataLength)
@@ -177,3 +196,5 @@ class AdbClient(private val host: String, private val port: Int, private val key
         }
     }
 }
+
+class AdbAuthorizationException : Exception("ADB authorization is required. Pair again or allow this ADB key.")

@@ -65,6 +65,11 @@ class StartWirelessAdbViewHolder(binding: HomeStartWirelessAdbBinding, root: Vie
     }
 
     private fun onAdbClicked(context: Context) {
+        if (moe.shizuku.manager.recovery.RecoverySettings.tcpEnabled) {
+            context.startActivity(Intent(context, StarterActivity::class.java)
+                .putExtra(StarterActivity.EXTRA_IS_ROOT, false))
+            return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             AdbDialogFragment().show(context.asActivity<FragmentActivity>().supportFragmentManager)
             return

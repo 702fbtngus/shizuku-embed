@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
@@ -49,6 +50,8 @@
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.USER_UNLOCKED" />
             </intent-filter>
         </receiver>
         <receiver android:name="moe.shizuku.manager.receiver.ShizukuReceiver" android:directBootAware="true" android:enabled="true" android:exported="false" android:process=":shizuku">
@@ -58,6 +61,10 @@
         </receiver>
         <provider android:name="moe.shizuku.manager.ShizukuManagerProvider" android:authorities="${applicationId}.shizuku" android:directBootAware="true" android:enabled="true" android:exported="true" android:multiprocess="false" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" android:process=":shizuku" />
         <provider android:name="moe.shizuku.manager.integration.ShizukuInitProvider" android:authorities="${applicationId}.shizuku.init" android:exported="false" android:directBootAware="true" android:initOrder="100" android:process=":shizuku" />
+        <service android:name="moe.shizuku.manager.recovery.RecoveryService" android:exported="false" android:directBootAware="true" android:foregroundServiceType="specialUse" android:process=":shizuku">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-enabled embedded privileged backend health monitoring and local ADB recovery" />
+        </service>
+        <service android:name="moe.shizuku.manager.recovery.RecoveryJobService" android:exported="true" android:permission="android.permission.BIND_JOB_SERVICE" android:directBootAware="true" android:process=":shizuku" />
     </application>
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" tools:node="remove" />
 </manifest>
