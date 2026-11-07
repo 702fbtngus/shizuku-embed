@@ -193,14 +193,8 @@ class SettingsFragment : PreferenceFragmentCompat() {
             }
         }
         findPreference<Preference>(RecoverySettings.EXPERIMENT_LOG)!!.setOnPreferenceClickListener {
-            val log = RecoverySettings.prefs.getString(RecoverySettings.EXPERIMENT_LOG,
-                getString(R.string.recovery_experiment_log_empty)).orEmpty()
-            MaterialAlertDialogBuilder(context).setTitle(R.string.recovery_experiment_log_title)
-                .setMessage(log).setPositiveButton(android.R.string.ok, null)
-                .setNeutralButton(android.R.string.copy) { _, _ ->
-                    context.getSystemService(ClipboardManager::class.java)
-                        .setPrimaryClip(ClipData.newPlainText(getString(R.string.recovery_experiment_log_title), log))
-                }.show()
+            showReport(R.string.recovery_experiment_log_title,
+                RecoverySettings.experimentReport(getString(R.string.recovery_experiment_log_empty)))
             true
         }
         val port = findPreference<EditTextPreference>(RecoverySettings.TCP_PORT)!!
@@ -224,8 +218,20 @@ class SettingsFragment : PreferenceFragmentCompat() {
         }
         findPreference<Preference>(RecoverySettings.STATUS)!!.setOnPreferenceClickListener {
             updateRecoveryStatus()
+            showReport(R.string.recovery_status_title,
+                RecoverySettings.statusReport(getString(R.string.recovery_waiting)))
             true
         }
+    }
+
+    private fun showReport(title: Int, report: String) {
+        val context = requireContext()
+        MaterialAlertDialogBuilder(context).setTitle(title)
+            .setMessage(report).setPositiveButton(android.R.string.ok, null)
+            .setNeutralButton(android.R.string.copy) { _, _ ->
+                context.getSystemService(ClipboardManager::class.java)
+                    .setPrimaryClip(ClipData.newPlainText(getString(title), report))
+            }.show()
     }
 
     private fun confirmExperiment() {
@@ -253,7 +259,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
     private fun updateRecoveryStatus() {
         findPreference<Preference>(RecoverySettings.STATUS)?.summary =
-            RecoverySettings.prefs.getString(RecoverySettings.STATUS, getString(R.string.recovery_waiting))
+            RecoverySettings.statusSummary(getString(R.string.recovery_waiting))
     }
 
     override fun onResume() {

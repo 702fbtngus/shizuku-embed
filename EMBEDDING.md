@@ -230,3 +230,18 @@ Wi-Fi reconnection, and actual terminal shell output. Repeat on Samsung and Xiao
 and verify existing guards during attempts. Build checks validate packaging and
 policy/resource ownership. Device support and offline boot success require
 physical-device tests.
+
+### First unlock and report identity
+
+Recovery registers USER_UNLOCKED at runtime while its foreground service is
+running. The first unlock requests a fresh attempt, and the periodic health check
+also checks credential readiness before applying connection backoff. Waiting for
+the first unlock keeps retry state ready, so a long locked boot cannot turn into
+a 320-second wait after the user unlocks. Manual Stop and paused recovery still
+take precedence.
+
+Recovery status includes its recorded time and boot count. Tap it to copy the
+full status with current boot/unlock state, startup policy and readiness trigger.
+Offline startup diagnostics records its start time, boot count and trigger. The
+viewer labels reports from another boot, and labels legacy reports whose boot
+identity is unknown. Compare both reports from the same boot during device tests.

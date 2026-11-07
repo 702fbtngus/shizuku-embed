@@ -7,12 +7,15 @@ import android.app.PendingIntent
 import android.app.Service
 import android.app.job.JobInfo
 import android.content.ComponentName
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.Network
 import android.os.Build
 import android.os.IBinder
+import android.os.UserManager
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +31,15 @@ import rikka.shizuku.Shizuku
 class RecoveryService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) { BackendRecovery.retryNow() }
+        override fun onAvailable(network: Network) { BackendRecovery.retryNow("network-available") }
+    }
+    private val unlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_USER_UNLOCKED &&
+                context.getSystemService(UserManager::class.java).isUserUnlocked) {
+                BackendRecovery.retryNow("user-unlocked")
+            }
+        }
     }
 
     override fun onCreate() {
@@ -39,6 +50,14 @@ class RecoveryService : Service() {
                 getString(R.string.recovery_channel), NotificationManager.IMPORTANCE_LOW))
         }
         startForeground(NOTIFICATION_ID, notification())
+        // USER_UNLOCKED is delivered only to runtime-registered receivers.
+        val unlockFilter = IntentFilter(Intent.ACTION_USER_UNLOCKED)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(unlockReceiver, unlockFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            // USER_UNLOCKED is a protected system broadcast on these releases too.
+            registerReceiver(unlockReceiver, unlockFilter)
+        }
         runCatching {
             getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(networkCallback)
         }
@@ -59,6 +78,7 @@ class RecoveryService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onDestroy() {
         scope.cancel()
+        runCatching { unregisterReceiver(unlockReceiver) }
         runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) }
         super.onDestroy()
     }

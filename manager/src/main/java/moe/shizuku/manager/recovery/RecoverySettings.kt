@@ -2,6 +2,11 @@ package moe.shizuku.manager.recovery
 
 import android.content.ComponentName
 import android.provider.Settings
+import android.os.SystemClock
+import android.os.UserManager
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import moe.shizuku.manager.ShizukuSettings
 import moe.shizuku.manager.application
 import moe.shizuku.manager.ktx.isComponentEnabled
@@ -15,8 +20,13 @@ internal object RecoverySettings {
     const val PAUSED = "recovery_paused"
     const val BOOT_PENDING = "recovery_boot_pending"
     const val STATUS = "recovery_status"
+    private const val STATUS_TIME = "recovery_status_time"
+    private const val STATUS_BOOT = "recovery_status_boot"
+    private const val STATUS_UPTIME = "recovery_status_uptime"
+    private const val TRIGGER = "recovery_trigger"
     const val EXPERIMENT_ENABLED = "recovery_experiment_enabled"
     const val EXPERIMENT_LOG = "recovery_experiment_log"
+    const val EXPERIMENT_BOOT = "recovery_experiment_boot"
     private const val EXPERIMENT_FAILURES = "recovery_experiment_failures"
     private const val EXPERIMENT_RETRY_AT = "recovery_experiment_retry_at"
 
@@ -70,6 +80,48 @@ internal object RecoverySettings {
     }
 
     fun status(message: String) {
-        prefs.edit().putString(STATUS, message).apply()
+        val boot = bootCount
+        if (prefs.getString(STATUS, null) == message && prefs.getInt(STATUS_BOOT, -1) == boot) return
+        prefs.edit().putString(STATUS, message).putInt(STATUS_BOOT, boot)
+            .putLong(STATUS_TIME, System.currentTimeMillis())
+            .putLong(STATUS_UPTIME, SystemClock.elapsedRealtime()).apply()
+    }
+
+    fun trigger(reason: String) {
+        prefs.edit().putString(TRIGGER, reason).apply()
+    }
+
+    val lastTrigger get() = prefs.getString(TRIGGER, "unknown").orEmpty()
+
+    fun formatTime(time: Long): String =
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date(time))
+
+    fun statusSummary(fallback: String): String {
+        val message = prefs.getString(STATUS, fallback).orEmpty()
+        val time = prefs.getLong(STATUS_TIME, 0)
+        return if (time == 0L) "$message\nRecorded time unavailable for this older status."
+        else "$message\n${formatTime(time)} / boot ${prefs.getInt(STATUS_BOOT, -1)}"
+    }
+
+    fun statusReport(fallback: String): String = buildString {
+        appendLine(statusSummary(fallback))
+        appendLine("Recorded uptimeMs=${prefs.getLong(STATUS_UPTIME, -1)}")
+        appendLine("Current boot=${prefs.getInt("recovery_boot", -1)} userUnlocked=${application.getSystemService(UserManager::class.java).isUserUnlocked}")
+        appendLine("Last readiness trigger=$lastTrigger")
+        appendLine("startOnBoot=$startOnBoot watchdog=$watchdog bootPending=$bootPending stopped=$stopped")
+        appendLine("paused=${prefs.getBoolean(PAUSED, false)} experimental=$experimentEnabled tcpOnStart=$tcpEnabled")
+        append("experimentalFailures=$experimentFailures retryAtUptimeMs=$experimentRetryAt")
+    }
+
+    fun experimentReport(fallback: String): String {
+        val report = prefs.getString(EXPERIMENT_LOG, null) ?: return fallback
+        val recorded = prefs.getInt(EXPERIMENT_BOOT, -1)
+        val current = prefs.getInt("recovery_boot", -1)
+        val origin = when {
+            recorded < 0 -> "Recorded boot unavailable for this older report."
+            recorded != current -> "Last experiment was recorded in a different boot."
+            else -> "Last experiment was recorded in the current boot."
+        }
+        return "Current boot=$current / recorded boot=$recorded\n$origin\n\n$report"
     }
 }

@@ -46,8 +46,7 @@ object BackendRecovery {
     @Volatile private var activeClient: AdbClient? = null
     @Volatile private var activeExperiment: ExperimentalWirelessSession? = null
     @Volatile private var stopLateBinderUntil = 0L
-    private var nextAttempt = 0L
-    private var failures = 0
+    private val retry = RecoveryRetry()
     private var startFailures = 0
     private var initialized = false
 
@@ -77,10 +76,13 @@ object BackendRecovery {
         RecoveryService.scheduleJob(application)
     }
 
-    fun retryNow() {
+    fun retryNow(reason: String = "readiness") {
         scope.launch {
             mutex.lock()
-            try { nextAttempt = 0 } finally { mutex.unlock() }
+            try {
+                retry.reset()
+                if (RecoverySettings.autoAllowed) RecoverySettings.trigger(reason)
+            } finally { mutex.unlock() }
             tick()
         }
     }
@@ -92,9 +94,8 @@ object BackendRecovery {
         ShizukuSettings.setLastLaunchMode(if (uid == 0) ShizukuSettings.LaunchMethod.ROOT else ShizukuSettings.LaunchMethod.ADB)
         RecoverySettings.prefs.edit().putBoolean(RecoverySettings.BOOT_PENDING, false)
             .putBoolean(RecoverySettings.PAUSED, false).apply()
-        failures = 0
         startFailures = 0
-        nextAttempt = 0
+        retry.reset()
         RecoverySettings.resetExperiment()
         RecoverySettings.status("Running as ${if (uid == 0) "root" else "shell"}.")
     }
@@ -134,8 +135,8 @@ object BackendRecovery {
                 .putBoolean(RecoverySettings.PAUSED, false).apply()
             stopLateBinderUntil = 0
             startFailures = 0
-            failures = 0
-            nextAttempt = 0
+            retry.reset()
+            RecoverySettings.trigger("manual")
             RecoverySettings.resetExperiment()
             start(root, host, port, true, ticket, output)
         } catch (e: CancellationException) {
@@ -163,10 +164,17 @@ object BackendRecovery {
                 recordRunning()
                 return
             }
-            if (SystemClock.elapsedRealtime() < nextAttempt) return
+            val root = ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ROOT
+            val waitingForUnlock = !root && !application.getSystemService(UserManager::class.java).isUserUnlocked
+            if (!retry.canAttempt(SystemClock.elapsedRealtime(), waitingForUnlock)) {
+                if (waitingForUnlock) RecoverySettings.status("Waiting for the first device unlock. Recovery resumes automatically.")
+                return
+            }
             try {
-                start(ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ROOT,
-                    null, 0, false, ticket, RecoverySettings::status)
+                start(root, null, 0, false, ticket, RecoverySettings::status)
+            } catch (_: UserLockedException) {
+                retry.reset()
+                RecoverySettings.status("Waiting for the first device unlock. Recovery resumes automatically.")
             } catch (e: CancellationException) {
                 currentCoroutineContext().ensureActive()
                 return
@@ -179,8 +187,7 @@ object BackendRecovery {
                     RecoverySettings.prefs.edit().putBoolean(RecoverySettings.PAUSED, true).apply()
                     RecoverySettings.status("Automatic recovery paused. Open Shizuku, check pairing and start manually. ${e.message}")
                 } else {
-                    val delay = RecoveryPolicy.retryDelayMs(failures++)
-                    nextAttempt = SystemClock.elapsedRealtime() + delay
+                    val delay = retry.failed(SystemClock.elapsedRealtime())
                     RecoverySettings.status("Waiting to retry in ${delay / 1000}s. ${e.message}")
                 }
             }
@@ -210,7 +217,7 @@ object BackendRecovery {
     private suspend fun startServer(root: Boolean, host: String?, port: Int, manual: Boolean,
                                     ticket: Long, output: (String) -> Unit) {
         if (!root && !application.getSystemService(UserManager::class.java).isUserUnlocked) {
-            error("Unlock the device once before restoring the ADB key.")
+            throw UserLockedException()
         }
         checkCurrent(ticket)
         if (root) {
@@ -389,5 +396,6 @@ object BackendRecovery {
     }
 
     private class RootUnavailableException : Exception("Root access is unavailable. Check authorization and start manually.")
+    private class UserLockedException : Exception("Unlock the device once before restoring the ADB key.")
     private class ServerStartException(message: String) : Exception(message)
 }

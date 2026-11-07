@@ -45,6 +45,8 @@ assert service_type == 'specialUse' or int(service_type, 0) == 0x40000000, servi
 backstop = components['moe.shizuku.manager.recovery.RecoveryJobService']
 assert backstop.get(ns+'permission') == 'android.permission.BIND_JOB_SERVICE'
 assert backstop.get(ns+'directBootAware') == 'true'
+boot_receiver = components['moe.shizuku.manager.receiver.BootCompleteReceiver']
+assert not boot_receiver.findall('.//action[@'+ns+'name="android.intent.action.USER_UNLOCKED"]')
 declared = [node.get(ns+'name', '') for node in manifest
             if node.tag in {'permission', 'permission-group', 'uses-permission'}]
 assert not any(name.startswith('moe.shizuku.manager.permission') for name in declared)

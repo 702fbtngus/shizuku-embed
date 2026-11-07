@@ -32,7 +32,10 @@ import kotlin.coroutines.resume
 internal class ExperimentalWirelessSession(private val context: Context) {
     private val lease = HotspotLease()
     private val started = SystemClock.elapsedRealtime()
+    private val boot = RecoverySettings.bootCount
     private val diagnostics = StringBuilder("Experimental offline startup\n")
+        .appendLine("Started ${RecoverySettings.formatTime(System.currentTimeMillis())}; boot=$boot; uptimeMs=$started")
+        .appendLine("Trigger=${RecoverySettings.lastTrigger}")
     private var nudger: Job? = null
     @Volatile private var hotspotRequest: CancellableContinuation<Boolean>? = null
     @Volatile var writeFailure: String? = null
@@ -116,7 +119,8 @@ internal class ExperimentalWirelessSession(private val context: Context) {
     }
 
     @Synchronized private fun saveLog() {
-        RecoverySettings.prefs.edit().putString(RecoverySettings.EXPERIMENT_LOG, diagnostics.toString()).apply()
+        RecoverySettings.prefs.edit().putString(RecoverySettings.EXPERIMENT_LOG, diagnostics.toString())
+            .putInt(RecoverySettings.EXPERIMENT_BOOT, boot).apply()
     }
 
     suspend fun stopNudging() {
