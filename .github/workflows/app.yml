@@ -1,54 +1,76 @@
-name: App
+name: Shizuku standalone baseline
 
 on:
+  workflow_dispatch:
   push:
+    branches: [openlock-integration]
     paths-ignore:
-      - '.github/ISSUE_TEMPLATE'
+      - '**/*.md'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shizuku-baseline-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
 
     steps:
-      - name: Checkout
+      - name: Check out source and nested API
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
+          submodules: recursive
+          # Upstream derives its development version from Git history.
           fetch-depth: 0
-      - name: Setup Java
+          persist-credentials: false
+      - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '21'
-      - name: Write key
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
-        run: |
-          echo KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} > signing.properties
-          echo KEYSTORE_ALIAS=${{ secrets.KEYSTORE_ALIAS }} >> signing.properties
-          echo KEYSTORE_ALIAS_PASSWORD='${{ secrets.KEYSTORE_ALIAS_PASSWORD }}' >> signing.properties
-          echo KEYSTORE_FILE=../key.jks >> signing.properties
-          echo ${{ secrets.KEYSTORE }} | base64 --decode > key.jks
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Set up Android command-line tools
+        uses: android-actions/setup-android@v3
         with:
-          dependency-graph: generate-and-submit
-          build-scan-publish: true
-          build-scan-terms-of-use-url: "https://gradle.com/terms-of-service"
-          build-scan-terms-of-use-agree: "yes"
-      - name: Build with Gradle
-        id: buildWithGradle
+          log-accepted-android-sdk-licenses: false
+
+      - name: Install upstream Android build tools
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null || true
-          echo 'android.sdk.channel=3' >> gradle.properties
-          echo 'android.native.buildOutput=verbose' >> gradle.properties
-          echo 'org.gradle.caching=true' >> gradle.properties
-          echo 'org.gradle.parallel=true' >> gradle.properties
-          ./gradlew :manager:assemble
-          releaseName=`ls manager/build/outputs/apk/release/shizuku*-v*-release.apk | awk -F '(/|-release.apk)' '{print $6}'` && echo "releaseName=$releaseName" >> $GITHUB_OUTPUT
-      - name: Upload release
-        if: success()
+          sdkmanager --install --channel=3 \
+            'platforms;android-36' 'build-tools;36.0.0' \
+            'ndk;29.0.13113456' 'cmake;3.31.6'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compile original manager and server
+        run: |
+          ./gradlew --no-daemon --stacktrace -Pandroid.sdk.channel=3 \
+            :manager:assembleDebug 2>&1 | tee "$RUNNER_TEMP/shizuku-baseline.log"
+
+      - name: Record source revisions and output
+        run: |
+          find manager/build/outputs/apk/debug -name '*.apk' -type f > "$RUNNER_TEMP/shizuku-baseline-apks.txt"
+          test -s "$RUNNER_TEMP/shizuku-baseline-apks.txt"
+          {
+            echo '### Standalone compilation passed'
+            echo "Source: $(git rev-parse HEAD)"
+            echo "API: $(git -C api rev-parse HEAD)"
+            echo 'The original manager and server compiled. Device behavior and OpenLock embedding are not tested by this job.'
+            echo 'No APK is published: this is a compiler baseline, not an OpenLock installation build.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.buildWithGradle.outputs.releaseName }}
-          path: "manager/build/outputs"
-          compression-level: 9
+          name: shizuku-baseline-diagnostics
+          path: |
+            ${{ runner.temp }}/shizuku-baseline.log
+            ${{ runner.temp }}/shizuku-baseline-apks.txt
+          if-no-files-found: ignore
+          retention-days: 7
