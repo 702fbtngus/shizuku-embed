@@ -1,4 +1,4 @@
-// Modified for OpenLock embedding; standalone behavior is retained.
+// Modified for host embedding; standalone behavior is retained.
 plugins {
     id 'com.android.library'
 }
@@ -13,7 +13,7 @@ android {
         buildConfigField 'String', 'PERMISSION_PREFIX', '"' + rootProject.ext.managerPermissionPrefix + '"'
         buildConfigField 'String', 'SERVER_PROCESS_NAME', '"' + rootProject.ext.serverProcessName + '"'
         buildConfigField 'String', 'SERVER_CONFIG_NAME', '"' + rootProject.ext.serverConfigName + '"'
-        buildConfigField 'boolean', 'OPENLOCK_EMBEDDED', rootProject.ext.openlockEmbedded.toString()
+        buildConfigField 'boolean', 'EMBEDDED_MANAGER', rootProject.ext.embeddedManager.toString()
     }
 }
 

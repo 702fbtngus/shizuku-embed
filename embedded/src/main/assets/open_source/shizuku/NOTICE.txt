@@ -1,7 +1,7 @@
-This OpenLock build includes modified Shizuku code from RikkaApps/Shizuku
+This library includes modified Shizuku code from RikkaApps/Shizuku
 and Shizuku-API. Original authors retain their copyright and attribution.
 Upstream: https://github.com/RikkaApps/Shizuku
-Integration fork: https://github.com/702fbtngus/openlock-shizuku
+Integration fork: https://github.com/702fbtngus/shizuku-embed
 The Android manager UI and startup/server implementation are reused.
-Host integration, process isolation and identifiers are modified for OpenLock.
+Host integration, process isolation and build-time identifiers support embedding.
 See the accompanying licenses and the upstream README trademark terms.

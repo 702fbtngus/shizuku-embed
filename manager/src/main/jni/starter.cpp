@@ -1,4 +1,4 @@
-// Modified for OpenLock: build-time host and process identity.
+// Modified for host embedding: build-time host and process identity.
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>

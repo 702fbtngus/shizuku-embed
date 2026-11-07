@@ -1,4 +1,4 @@
-// Modified for OpenLock embedding; standalone behavior is retained.
+// Modified for host embedding; standalone behavior is retained.
 package moe.shizuku.manager.ktx
 
 import android.content.Context

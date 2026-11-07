@@ -1,9 +1,9 @@
-name: Shizuku standalone baseline
+name: Shizuku Embed build checks
 
 on:
   workflow_dispatch:
   push:
-    branches: [openlock-integration]
+    branches: [main]
     paths-ignore:
       - '**/*.md'
   pull_request:
@@ -58,6 +58,9 @@ jobs:
           ./gradlew --no-daemon --stacktrace -Pandroid.sdk.channel=3 \
             :manager:assembleDebug 2>&1 | tee "$RUNNER_TEMP/shizuku-baseline.log"
 
+      - name: Verify host identity configuration
+        run: python3 -m unittest discover -s integration-consumer -p test_embedding_config.py
+
       - name: Record source revisions and output
         run: |
           find manager/build/outputs/apk/debug -name '*.apk' -type f > "$RUNNER_TEMP/shizuku-baseline-apks.txt"
@@ -66,8 +69,8 @@ jobs:
             echo '### Standalone compilation passed'
             echo "Source: $(git rev-parse HEAD)"
             echo "API: $(git -C api rev-parse HEAD)"
-            echo 'The original manager and server compiled. Device behavior and OpenLock embedding are not tested by this job.'
-            echo 'No APK is published: this is a compiler baseline, not an OpenLock installation build.'
+            echo 'The original manager and server compiled. Device behavior requires host application testing.'
+            echo 'This job retains the upstream standalone identity as a compiler baseline.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build diagnostics
@@ -82,9 +85,13 @@ jobs:
           retention-days: 7
 
   embedded:
-    name: Embedded composite host
+    name: Embedded host (${{ matrix.application_id }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        application_id: [com.example.shizuku.host, org.example.embedded.demo]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,16 +113,17 @@ jobs:
       - name: Compile the embedded UI in a composite consumer
         run: |
           ./gradlew --no-daemon --stacktrace -p integration-consumer \
+            -PshizukuHostApplicationId=${{ matrix.application_id }} \
             :app:assembleDebug :app:assembleRelease 2>&1 | tee "$RUNNER_TEMP/shizuku-embedded.log"
       - name: Verify the merged APK and native payload
         run: |
-          python3 integration-consumer/verify_apk.py integration-host/build/outputs/apk/debug/app-debug.apk
-          python3 integration-consumer/verify_apk.py integration-host/build/outputs/apk/release/app-release-unsigned.apk
+          python3 integration-consumer/verify_apk.py integration-host/build/outputs/apk/debug/app-debug.apk --application-id ${{ matrix.application_id }}
+          python3 integration-consumer/verify_apk.py integration-host/build/outputs/apk/release/app-release-unsigned.apk --application-id ${{ matrix.application_id }}
       - name: Upload embedded build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: shizuku-embedded-diagnostics
+          name: shizuku-embedded-diagnostics-${{ matrix.application_id }}
           path: ${{ runner.temp }}/shizuku-embedded.log
           if-no-files-found: ignore
           retention-days: 7

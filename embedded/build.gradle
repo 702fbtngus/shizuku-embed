@@ -1,4 +1,4 @@
-// OpenLock integration: reuse the original manager UI and native sources.
+// Host embedding: reuse the original manager UI and native sources.
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
@@ -8,7 +8,7 @@ plugins {
 
 // Upstream AutoResConfig targets AppExtension only. Generate its two public
 // locale arrays from the same translation folders for this library build.
-def localeOutput = layout.buildDirectory.dir('generated/openlockLocales')
+def localeOutput = layout.buildDirectory.dir('generated/embeddedLocales')
 def generateLocales = tasks.register('generateEmbeddedLocales') {
     inputs.dir(rootProject.file('manager/src/main/res'))
     outputs.dir(localeOutput)

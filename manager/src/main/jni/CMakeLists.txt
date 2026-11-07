@@ -4,7 +4,7 @@ project("shizuku")
 
 set(CMAKE_CXX_STANDARD 17)
 
-# Modified for OpenLock embedding; no runtime package input is accepted.
+# Modified for host embedding; no runtime package input is accepted.
 if(DEFINED SHIZUKU_MANAGER_APPLICATION_ID)
     add_compile_definitions(SHIZUKU_MANAGER_APPLICATION_ID="${SHIZUKU_MANAGER_APPLICATION_ID}")
     add_compile_definitions(SHIZUKU_SERVER_PROCESS_NAME="${SHIZUKU_SERVER_PROCESS_NAME}")

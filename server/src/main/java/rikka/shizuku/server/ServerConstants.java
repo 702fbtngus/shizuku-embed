@@ -1,4 +1,4 @@
-// Modified for OpenLock: isolate embedded host identity and lifecycle.
+// Modified for host embedding: isolate embedded host identity and lifecycle.
 package rikka.shizuku.server;
 
 public class ServerConstants {

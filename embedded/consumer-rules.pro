@@ -1,4 +1,4 @@
-# Modified for OpenLock: preserve shell entry points without applying the
+# Modified for host embedding: preserve shell entry points without applying the
 # standalone manager's global repackaging/side-effect rules to the host.
 # These APIs are supplied by Android at runtime, outside the public SDK jar.
 -dontwarn com.android.internal.app.IAppOpsService

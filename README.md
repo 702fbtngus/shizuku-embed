@@ -1,85 +1,100 @@
-# Shizuku
+# Shizuku Embed
 
-## Background
+Embed Shizuku's native manager UI, wireless ADB pairing, starter and privileged
+server in an Android application. The consuming app supplies its identity and
+opens the manager from its own UI.
 
-When developing apps that requires root, the most common method is to run some commands in the su shell. For example, there is an app that uses the `pm enable/disable` command to enable/disable components.
+This is a community-maintained fork of [RikkaApps/Shizuku](https://github.com/RikkaApps/Shizuku).
+The original authors retain their copyright and attribution. Development of the
+embedding layer takes place on `main` in [shizuku-embed](https://github.com/702fbtngus/shizuku-embed).
 
-This method has very big disadvantages:
+## What is included
 
-1. **Extremely slow** (Multiple process creation)
-2. Needs to process texts (**Super unreliable**)
-3. The possibility is limited to available commands
-4. Even if ADB has sufficient permissions, the app requires root privileges to run
+- Original native Android screens and pairing/startup flows.
+- An `embedded` Android library built from the original manager sources.
+- A private manager entry Activity and initialization in the host's `:shizuku` process.
+- Host-scoped provider authorities, permissions, native starter identity and server configuration.
+- Composite-build test hosts with Debug and optimized Release APK checks.
+- Upstream `manager`, `server`, `starter`, `shell` and nested `api` source history.
 
-Shizuku uses a completely different way. See detailed description below.
+Host authentication, application policy and permission-recovery decisions belong
+in the consuming application. The embedding library manages Shizuku's UI and
+server lifecycle. Its provider retries avoid force-stopping the host package.
 
-## User guide & Download
+## Use in an application
 
-<https://shizuku.rikka.app/>
+Clone recursively or add this repository as a recursive Git submodule. Pin a
+tested commit when distributing an application.
 
-## How does Shizuku work?
+```sh
+git clone --recurse-submodules https://github.com/702fbtngus/shizuku-embed.git
+```
 
-First, we need to talk about how app use system APIs. For example, if the app wants to get installed apps, we all know we should use `PackageManager#getInstalledPackages()`. This is actually an interprocess communication (IPC) process of the app process and system server process, just the Android framework did the inner works for us.
+Include this build in the host's Gradle settings, add
+`dev.shizuku.embed:embedded:1.0`, and set `shizukuHostApplicationId` to the host's
+actual application ID. The coordinate is resolved from the local composite
+build. Maven publication is future work.
 
-Android uses `binder` to do this type of IPC. `Binder` allows the server-side to learn the uid and pid of the client-side, so that the system server can check if the app has the permission to do the operation.
+The host also configures native-library extraction, the AppCompat dependency
+choice and hidden-API compile stubs. See [EMBEDDING.md](EMBEDDING.md) for complete
+Gradle configuration, native Activity launch code and upgrade considerations.
 
-Usually, if there is a "manager" (e.g., `PackageManager`) for apps to use, there should be a "service" (e.g., `PackageManagerService`) in the system server process. We can simply think if the app holds the `binder` of the "service", it can communicate with the "service". The app process will receive binders of system services on start.
+## Build and verify
 
-Shizuku guides users to run a process, Shizuku server, with root or ADB first. When the app starts, the `binder` to Shizuku server will also be sent to the app.
+The current toolchain uses JDK 21, Gradle 8.14, Android Gradle Plugin 8.11.1,
+Android SDK/build tools 36, NDK 29.0.13113456 and CMake 3.31.6. Composite hosts
+must align their Android Gradle Plugin version with this build.
 
-The most important feature Shizuku provides is something like be a middle man to receive requests from the app, sent them to the system server, and send back the results. You can see the `transactRemote` method in `rikka.shizuku.server.ShizukuService` class, and `moe.shizuku.api.ShizukuBinderWrapper` class for the detail.
+Build the example consumer with an explicit application identity.
 
-So, we reached our goal, to use system APIs with higher permission. And to the app, it is almost identical to the use of system APIs directly.
+```sh
+./gradlew -p integration-consumer \
+  -PshizukuHostApplicationId=com.example.shizuku.host \
+  :app:assembleDebug :app:assembleRelease
 
-## Developer guide
+python3 integration-consumer/verify_apk.py \
+  integration-host/build/outputs/apk/debug/app-debug.apk \
+  --application-id com.example.shizuku.host
 
-### API & sample
+python3 integration-consumer/verify_apk.py \
+  integration-host/build/outputs/apk/release/app-release-unsigned.apk \
+  --application-id com.example.shizuku.host
+```
 
-https://github.com/RikkaApps/Shizuku-API
+Use `gradlew.bat` on Windows. APK verification requires `apkanalyzer` on `PATH`.
+The example host is a packaging fixture. Test pairing, backend responses,
+navigation, reboot/reconnection and updates in the actual consuming app.
 
-### Migrating from pre-v11
+The original standalone compiler baseline remains available through
+`./gradlew :manager:assembleDebug`. It retains upstream's standalone identity
+for compilation. Distribution requires adapting the branding and identifiers
+under the upstream terms.
 
-> Existing applications still works, of course.
+CI compiles this baseline and embeds the library into two independently named
+example hosts. It checks both Debug and R8/resource-shrunk Release APKs for
+manager isolation, permissions, starter identity and native/DEX assets.
 
-https://github.com/RikkaApps/Shizuku-API#migration-guide-for-existing-applications-use-shizuku-pre-v11
+## Runtime scope
 
-### Attention
+Users start the privileged server through the original ADB or root flow.
+Embedding supplies the implementation and UI. Actual operations depend on the
+running server's UID, Android version and manufacturer restrictions.
 
-1. ADB permissions are limited
+The manager home Activity is internal. The host chooses the authentication
+policy before opening it and reviews notification, Recents and authorization
+entry paths for its threat model. Legacy external rish entry points are disabled.
+Compatibility with existing third-party clients of the official Shizuku app
+requires separate integration work.
 
-   ADB has limited permissions and different on various system versions. You can see permissions granted to ADB [here](https://github.com/aosp-mirror/platform_frameworks_base/blob/master/packages/Shell/AndroidManifest.xml).
+## Upstream and license
 
-   Before calling the API, you can use `ShizukuService#getUid` to check if Shizuku is running user ADB, or use `ShizukuService#checkPermission` to check if the server has sufficient permissions.
+- [Original project](https://github.com/RikkaApps/Shizuku)
+- [Original documentation and user guide](https://shizuku.rikka.app/)
+- [Shizuku API](https://github.com/RikkaApps/Shizuku-API)
+- [Apache 2.0 license](LICENSE)
+- [Preserved upstream README and branding terms](embedded/src/main/assets/open_source/shizuku/UPSTREAM-README.md)
 
-2. Hidden API limitation from Android 9
-
-   As of Android 9, the usage of the hidden APIs is limited for normal apps. Please use other methods (such as <https://github.com/LSPosed/AndroidHiddenApiBypass>).
-
-3. Android 8.0 & ADB
-
-   At present, the way Shizuku service gets the app process is to combine `IActivityManager#registerProcessObserver` and `IActivityManager#registerUidObserver` (26+) to ensure that the app process will be sent when the app starts. However, on API 26, ADB lacks permissions to use `registerUidObserver`, so if you need to use Shizuku in a process that might not be started by an Activity, it is recommended to trigger the send binder by starting a transparent activity.
-
-4. Direct use of `transactRemote` requires attention
-
-   * The API may be different under different Android versions, please be sure to check it carefully. Also, the `android.app.IActivityManager` has the aidl form in API 26 and later, and `android.app.IActivityManager$Stub` exists only on API 26.
-
-   * `SystemServiceHelper.getTransactionCode` may not get the correct transaction code, such as `android.content.pm.IPackageManager$Stub.TRANSACTION_getInstalledPackages` does not exist on API 25 and there is `android.content.pm.IPackageManager$Stub.TRANSACTION_getInstalledPackages_47` (this situation has been dealt with, but it is not excluded that there may be other circumstances). This problem is not encountered with the `ShizukuBinderWrapper` method.
-
-## Developing Shizuku itself
-
-### Build
-
-- Clone with `git clone --recurse-submodules`
-- Run gradle task `:manager:assembleDebug` or `:manager:assembleRelease`
-
-The `:manager:assembleDebug` task generates a debuggable server. You can attach a debugger to `shizuku_server` to debug the server. Be aware that, in Android Studio, "Run/Debug configurations" - "Always install with package manager" should be checked, so that the server will use the latest code.
-
-## License
-
-All code files in this project are licensed under Apache 2.0
-
-Under Apache 2.0 section 6, specifically:
-
-* You are **FORBIDDEN** to use `manager/src/main/res/mipmap*/ic_launcher*.png` image files, unless for displaying Shizuku itself.
-
-* You are **FORBIDDEN** to use `Shizuku` as app name or use `moe.shizuku.privileged.api` as application id or declare `moe.shizuku.manager.permission.*` permission.
+Upstream's branding terms restrict use of its launcher icons, the standalone
+app name, official application ID and `moe.shizuku.manager.permission.*`
+permission names. Retain the bundled licenses, attribution and modification
+notices. The embedded build uses the consuming app's identity and permissions.

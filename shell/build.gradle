@@ -1,4 +1,4 @@
-// Modified for OpenLock embedding; standalone behavior is retained.
+// Modified for host embedding; standalone behavior is retained.
 plugins {
     id 'com.android.application'
     id 'dev.rikka.tools.refine'

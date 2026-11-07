@@ -1,4 +1,4 @@
-// Modified for OpenLock: isolate embedded host identity and lifecycle.
+// Modified for host embedding: isolate embedded host identity and lifecycle.
 package rikka.shizuku.server;
 
 import static android.Manifest.permission.WRITE_SECURE_SETTINGS;
@@ -542,7 +542,7 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             if (!provider.asBinder().pingBinder()) {
                 LOGGER.e("provider is dead %s %d", name, userId);
 
-                if (retry && !rikka.shizuku.common.BuildConfig.OPENLOCK_EMBEDDED) {
+                if (retry && !rikka.shizuku.common.BuildConfig.EMBEDDED_MANAGER) {
                     // For unknown reason, sometimes this could happens
                     // Kill Shizuku app and try again could work
                     ActivityManagerApis.forceStopPackageNoThrow(packageName, userId);

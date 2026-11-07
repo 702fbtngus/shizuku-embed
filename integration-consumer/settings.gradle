@@ -9,7 +9,7 @@ dependencyResolutionManagement {
         maven { url 'https://jitpack.io'; content { includeGroup 'com.github.topjohnwu.libsu' } }
     }
 }
-rootProject.name = 'openlock-shizuku-composite-test'
+rootProject.name = 'shizuku-embed-composite-test'
 include ':app'
 project(':app').projectDir = file('../integration-host')
 includeBuild('..')

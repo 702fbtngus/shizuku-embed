@@ -1,10 +1,10 @@
 // Small host for compiling and inspecting the embedded library independently
-// of Flutter. Never published as an installable OpenLock build.
+// of a consuming app. Used only for compilation and APK inspection.
 plugins { id 'com.android.application' }
 android {
-    namespace 'dev.abdullah.openlock.integrationtest'
+    namespace 'dev.shizuku.embed.integrationtest'
     defaultConfig {
-        applicationId 'dev.abdullah.openlock'
+        applicationId providers.gradleProperty('shizukuHostApplicationId').get()
         versionCode 1
         versionName 'integration-test'
         ndk { abiFilters 'arm64-v8a' }
@@ -30,6 +30,6 @@ dependencies {
     if (rootProject.findProject(':embedded') != null) {
         implementation project(':embedded')
     } else {
-        implementation 'dev.abdullah.openlock.shizuku:embedded:1.0'
+        implementation 'dev.shizuku.embed:embedded:1.0'
     }
 }

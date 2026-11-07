@@ -1,4 +1,4 @@
-// Derived from upstream manager/build.gradle; shared with OpenLock embedding.
+// Derived from upstream manager/build.gradle; shared with host embedding.
 import java.nio.file.Paths
 
 def standalone = plugins.hasPlugin('com.android.application')

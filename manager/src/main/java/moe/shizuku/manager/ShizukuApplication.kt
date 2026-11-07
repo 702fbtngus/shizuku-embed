@@ -9,7 +9,7 @@ import org.lsposed.hiddenapibypass.HiddenApiBypass
 import rikka.core.util.BuildUtils.atLeast30
 import rikka.material.app.LocaleDelegate
 
-// Modified for OpenLock embedding: the host owns its Application class.
+// Modified for host embedding: the host owns its Application class.
 lateinit var application: Application
 
 class ShizukuApplication : Application() {

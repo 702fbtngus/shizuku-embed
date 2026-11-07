@@ -12,7 +12,7 @@
 /out
 /signing.properties
 
-# OpenLock embedding build outputs
+# Embedded build outputs
 **/build/
 **/.cxx/
 **/__pycache__/

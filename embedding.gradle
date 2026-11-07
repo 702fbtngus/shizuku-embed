@@ -1,0 +1,26 @@
+// Build-time identity shared by the manager, native starter and shell server.
+ext.embeddedManager = gradle.parent != null || providers.gradleProperty('shizukuEmbedded').orNull == 'true'
+ext.managerApplicationId = 'moe.shizuku.privileged.api'
+ext.managerPermissionPrefix = 'moe.shizuku.manager.permission'
+ext.serverProcessName = 'shizuku_server'
+ext.serverConfigName = 'shizuku.json'
+
+if (embeddedManager) {
+    def host = providers.gradleProperty('shizukuHostApplicationId').orNull
+    if (host == null || !(host ==~ /[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+/) ||
+        host == 'moe.shizuku.privileged.api') {
+        throw new GradleException('Set shizukuHostApplicationId to the consuming app application ID. See EMBEDDING.md.')
+    }
+    def process = providers.gradleProperty('shizukuServerProcessName').getOrElse(host + '_shizuku_server')
+    if (!(process ==~ /[A-Za-z0-9_][A-Za-z0-9_.-]*/) || process == 'shizuku_server') {
+        throw new GradleException('shizukuServerProcessName must be a host-specific process name using letters, digits, dots, underscores or hyphens.')
+    }
+    def config = providers.gradleProperty('shizukuServerConfigName').getOrElse(host + '-shizuku.json')
+    if (!(config ==~ /[A-Za-z0-9_][A-Za-z0-9_.-]*\.json/) || config.contains('..') || config == 'shizuku.json') {
+        throw new GradleException('shizukuServerConfigName must be a host-specific JSON filename without directory components.')
+    }
+    ext.managerApplicationId = host
+    ext.managerPermissionPrefix = host + '.shizuku.permission'
+    ext.serverProcessName = process
+    ext.serverConfigName = config
+}
