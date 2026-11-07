@@ -1,6 +1,5 @@
 // Derived from upstream manager/build.gradle; shared with OpenLock embedding.
 import java.nio.file.Paths
-import com.android.build.gradle.internal.tasks.CompileArtProfileTask
 
 def standalone = plugins.hasPlugin('com.android.application')
 
@@ -74,11 +73,13 @@ android {
     }
 }
 
+if (standalone) {
 autoResConfig {
     generatedClassFullName = "rikka.shizuku.manager.ShizukuLocales"
     generateRes = false
     generatedArrayFirstItem = "SYSTEM"
     generateLocaleConfig = true
+}
 }
 
 materialThemeBuilder {
@@ -149,7 +150,8 @@ afterEvaluate {
     tasks.named('preDebugBuild').configure { dependsOn(':shell:assembleDebug') }
 }
 
-tasks.withType(CompileArtProfileTask.class).configureEach {
+// Applied scripts do not share the Android plugin's implementation classloader.
+tasks.matching { it.name.startsWith('compile') && it.name.endsWith('ArtProfile') }.configureEach {
     enabled = false
 }
 configurations.configureEach {

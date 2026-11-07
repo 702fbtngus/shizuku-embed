@@ -3,8 +3,36 @@ plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
     id 'dev.rikka.tools.refine'
-    id 'dev.rikka.tools.autoresconfig'
     id 'dev.rikka.tools.materialthemebuilder'
+}
+
+// Upstream AutoResConfig targets AppExtension only. Generate its two public
+// locale arrays from the same translation folders for this library build.
+def localeOutput = layout.buildDirectory.dir('generated/openlockLocales')
+def generateLocales = tasks.register('generateEmbeddedLocales') {
+    inputs.dir(rootProject.file('manager/src/main/res'))
+    outputs.dir(localeOutput)
+    doLast {
+        def tags = ['en']
+        rootProject.file('manager/src/main/res').eachDir { directory ->
+            def qualifier = directory.name.replaceFirst('^values-', '')
+            if (new File(directory, 'strings.xml').isFile()) {
+                if (qualifier ==~ /[a-z]{2,3}(-r[A-Z]{2})?/) {
+                    tags.add(qualifier.replace('-r', '-'))
+                } else if (qualifier.startsWith('b+')) {
+                    tags.add(qualifier.substring(2).replace('+', '-'))
+                }
+            }
+        }
+        def values = (['SYSTEM'] + tags.unique().sort()).collect {
+            groovy.json.JsonOutput.toJson(it)
+        }.join(', ')
+        def output = new File(localeOutput.get().asFile, 'rikka/shizuku/manager/ShizukuLocales.java')
+        output.parentFile.mkdirs()
+        output.text = 'package rikka.shizuku.manager;\npublic final class ShizukuLocales {\n' +
+            'public static final String[] LOCALES = new String[]{' + values + '};\n' +
+            'public static final String[] DISPLAY_LOCALES = LOCALES;\n}\n'
+    }
 }
 
 apply from: rootProject.file('manager/module.gradle')
@@ -13,8 +41,10 @@ android {
     sourceSets {
         main {
             java.srcDirs += [rootProject.file('manager/src/main/java')]
+            java.srcDir(localeOutput)
             res.srcDirs += [rootProject.file('manager/src/main/res')]
             assets.srcDirs += [rootProject.file('manager/src/main/assets')]
         }
     }
 }
+tasks.named('preBuild').configure { dependsOn(generateLocales) }

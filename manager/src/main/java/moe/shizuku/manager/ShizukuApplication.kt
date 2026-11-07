@@ -1,7 +1,6 @@
 package moe.shizuku.manager
 
 import android.app.Application
-import android.content.Context
 import android.os.Build
 import androidx.appcompat.app.AppCompatDelegate
 import com.topjohnwu.superuser.Shell
@@ -36,12 +35,6 @@ class ShizukuApplication : Application() {
             LocaleDelegate.defaultLocale = ShizukuSettings.getLocale()
             AppCompatDelegate.setDefaultNightMode(ShizukuSettings.getNightMode())
         }
-    }
-
-    private fun init(context: Context?) {
-        ShizukuSettings.initialize(context)
-        LocaleDelegate.defaultLocale = ShizukuSettings.getLocale()
-        AppCompatDelegate.setDefaultNightMode(ShizukuSettings.getNightMode())
     }
 
     override fun onCreate() {
