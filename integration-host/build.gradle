@@ -25,6 +25,8 @@ configurations.configureEach {
     exclude group: 'androidx.appcompat', module: 'appcompat'
 }
 dependencies {
+    // Library compileOnly dependencies do not propagate to a shrinking host.
+    compileOnly 'dev.rikka.hidden:stub:4.4.0'
     if (rootProject.findProject(':embedded') != null) {
         implementation project(':embedded')
     } else {
