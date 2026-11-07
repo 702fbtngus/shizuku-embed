@@ -1,6 +1,9 @@
+// Modified for host embedding: expose the running server to the host UID.
 package moe.shizuku.manager
 
 import android.os.Bundle
+import android.os.Binder
+import android.os.Process
 import androidx.core.os.bundleOf
 import moe.shizuku.api.BinderContainer
 import moe.shizuku.manager.utils.Logger.LOGGER
@@ -17,6 +20,9 @@ class ShizukuManagerProvider : ShizukuProvider() {
     companion object {
         private const val EXTRA_BINDER = "moe.shizuku.privileged.api.intent.extra.BINDER"
         private const val METHOD_SEND_USER_SERVICE = "sendUserService"
+        // Host embedding protocol. The server already authorizes its manager UID.
+        const val METHOD_GET_HOST_BINDER = "getHostServerBinder"
+        const val EXTRA_HOST_BINDER = "hostServerBinder"
     }
 
     override fun onCreate(): Boolean {
@@ -25,6 +31,13 @@ class ShizukuManagerProvider : ShizukuProvider() {
     }
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
+        if (method == METHOD_GET_HOST_BINDER) {
+            if (!rikka.shizuku.common.BuildConfig.EMBEDDED_MANAGER ||
+                Binder.getCallingUid() != Process.myUid()) {
+                throw SecurityException("Embedded server access requires the host application UID.")
+            }
+            return Bundle().apply { putBinder(EXTRA_HOST_BINDER, Shizuku.getBinder()) }
+        }
         if (extras == null) return null
 
         return if (method == METHOD_SEND_USER_SERVICE) {

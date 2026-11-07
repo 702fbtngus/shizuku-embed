@@ -48,3 +48,8 @@ android {
     }
 }
 tasks.named('preBuild').configure { dependsOn(generateLocales) }
+
+dependencies {
+    // Public host bridge returns the upstream server interface.
+    api project(':aidl')
+}

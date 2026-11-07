@@ -22,6 +22,10 @@
     public static void main(java.lang.String[], java.lang.String, android.os.IBinder, android.os.Handler);
 }
 -keepnames class moe.shizuku.api.BinderContainer
+# Match the standalone release's removal of debug logs, including process args.
+-assumenosideeffects class rikka.shizuku.server.util.Logger {
+    public *** d(...);
+}
 -keepclasseswithmembernames,includedescriptorclasses class * {
     native <methods>;
 }

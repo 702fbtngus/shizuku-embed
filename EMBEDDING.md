@@ -117,6 +117,25 @@ notifications, boot and system authorization paths separately.
 
 ## Verification and upgrades
 
+### Access the running backend from the host
+
+After host authentication, call `EmbeddedShizuku.getService(context)` on a worker
+thread. It returns the upstream `IShizukuService` interface, or null while the
+server is unavailable. The provider bridge accepts only the host application's
+UID. UI/pairing globals continue to initialize in `:shizuku`.
+
+```kotlin
+import moe.shizuku.manager.integration.EmbeddedShizuku
+
+val server = EmbeddedShizuku.getService(context)
+val uid = server?.uid
+```
+
+The host manages process streams, cancellation and authentication before using
+privileged operations. Reacquire the interface after server death or restart.
+
+### Build and device checks
+
 `integration-consumer` consumes the library as a separate composite build.
 `integration-host` supplies its minimal app module. CI uses different application
 IDs for two consumers and inspects both Debug and optimized Release APKs.

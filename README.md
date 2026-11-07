@@ -14,6 +14,7 @@ embedding layer takes place on `main` in [shizuku-embed](https://github.com/702f
 - An `embedded` Android library built from the original manager sources.
 - A private manager entry Activity and initialization in the host's `:shizuku` process.
 - Host-scoped provider authorities, permissions, native starter identity and server configuration.
+- A host-UID-only bridge to the running server from the consuming app's process.
 - Composite-build test hosts with Debug and optimized Release APK checks.
 - Upstream `manager`, `server`, `starter`, `shell` and nested `api` source history.
 
