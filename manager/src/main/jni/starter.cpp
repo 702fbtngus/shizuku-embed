@@ -1,3 +1,4 @@
+// Modified for OpenLock: build-time host and process identity.
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
@@ -31,8 +32,14 @@
 #define EXIT_FATAL_KILL 9
 #define EXIT_FATAL_BINDER_BLOCKED_BY_SELINUX 10
 
-#define PACKAGE_NAME "moe.shizuku.privileged.api"
-#define SERVER_NAME "shizuku_server"
+#ifndef SHIZUKU_MANAGER_APPLICATION_ID
+#define SHIZUKU_MANAGER_APPLICATION_ID "moe.shizuku.privileged.api"
+#endif
+#ifndef SHIZUKU_SERVER_PROCESS_NAME
+#define SHIZUKU_SERVER_PROCESS_NAME "shizuku_server"
+#endif
+#define PACKAGE_NAME SHIZUKU_MANAGER_APPLICATION_ID
+#define SERVER_NAME SHIZUKU_SERVER_PROCESS_NAME
 #define SERVER_CLASS_PATH "rikka.shizuku.server.ShizukuService"
 
 #if defined(__arm__)

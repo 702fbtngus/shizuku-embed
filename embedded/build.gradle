@@ -1,0 +1,20 @@
+// OpenLock integration: reuse the original manager UI and native sources.
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    id 'dev.rikka.tools.refine'
+    id 'dev.rikka.tools.autoresconfig'
+    id 'dev.rikka.tools.materialthemebuilder'
+}
+
+apply from: rootProject.file('manager/module.gradle')
+
+android {
+    sourceSets {
+        main {
+            java.srcDirs += [rootProject.file('manager/src/main/java')]
+            res.srcDirs += [rootProject.file('manager/src/main/res')]
+            assets.srcDirs += [rootProject.file('manager/src/main/assets')]
+        }
+    }
+}

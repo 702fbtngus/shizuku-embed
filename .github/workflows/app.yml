@@ -76,3 +76,42 @@ jobs:
             ${{ runner.temp }}/shizuku-baseline-apks.txt
           if-no-files-found: ignore
           retention-days: 7
+
+  embedded:
+    name: Embedded composite host
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - name: Install native toolchain
+        run: |
+          sdkmanager --install --channel=3 'platforms;android-36' 'build-tools;36.0.0' 'ndk;29.0.13113456' 'cmake;3.31.6'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile the embedded UI in a composite consumer
+        run: |
+          ./gradlew --no-daemon --stacktrace -p integration-consumer \
+            :app:assembleDebug :app:assembleRelease 2>&1 | tee "$RUNNER_TEMP/shizuku-embedded.log"
+      - name: Verify the merged APK and native payload
+        run: |
+          python3 integration-consumer/verify_apk.py integration-host/build/outputs/apk/debug/app-debug.apk
+          python3 integration-consumer/verify_apk.py integration-host/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Upload embedded build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shizuku-embedded-diagnostics
+          path: ${{ runner.temp }}/shizuku-embedded.log
+          if-no-files-found: ignore
+          retention-days: 7

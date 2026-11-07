@@ -1,5 +1,16 @@
+// Modified for OpenLock embedding; standalone behavior is retained.
 plugins {
     id("idea")
+}
+
+ext.openlockEmbedded = gradle.parent != null || providers.gradleProperty('openlockEmbedded').orNull == 'true'
+ext.managerApplicationId = openlockEmbedded ? 'dev.abdullah.openlock' : 'moe.shizuku.privileged.api'
+ext.managerPermissionPrefix = openlockEmbedded ? 'dev.abdullah.openlock.shizuku.permission' : 'moe.shizuku.manager.permission'
+ext.serverProcessName = openlockEmbedded ? 'openlock_shizuku_server' : 'shizuku_server'
+ext.serverConfigName = openlockEmbedded ? 'openlock-shizuku.json' : 'shizuku.json'
+allprojects {
+    group = 'dev.abdullah.openlock.shizuku'
+    version = '1.0'
 }
 
 idea.module {

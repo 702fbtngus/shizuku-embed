@@ -1,3 +1,4 @@
+// Modified for OpenLock: isolate embedded host identity and lifecycle.
 package rikka.shizuku.server;
 
 import static rikka.shizuku.server.ServerConstants.PERMISSION;
@@ -39,7 +40,7 @@ public class ShizukuConfigManager extends ConfigManager {
 
     private static final long WRITE_DELAY = 10 * 1000;
 
-    private static final File FILE = new File("/data/user_de/0/com.android.shell/shizuku.json");
+    private static final File FILE = new File("/data/user_de/0/com.android.shell", rikka.shizuku.common.BuildConfig.SERVER_CONFIG_NAME);
     private static final AtomicFile ATOMIC_FILE = new AtomicFile(FILE);
 
     public static ShizukuConfig load() {

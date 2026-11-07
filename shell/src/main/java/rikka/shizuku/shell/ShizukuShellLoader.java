@@ -1,3 +1,4 @@
+// Modified for OpenLock: isolate embedded host identity and lifecycle.
 package rikka.shizuku.shell;
 
 import android.app.ActivityManagerNative;
@@ -54,7 +55,7 @@ public class ShizukuShellLoader {
         data.putBinder("binder", receiverBinder);
 
         Intent intent = new Intent("rikka.shizuku.intent.action.REQUEST_BINDER")
-                .setPackage("moe.shizuku.privileged.api")
+                .setPackage(rikka.shizuku.common.BuildConfig.MANAGER_APPLICATION_ID)
                 .addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
                 .putExtra("data", data);
 

@@ -1,0 +1,13 @@
+subprojects {
+    plugins.withId('com.android.application') {
+        android {
+            compileSdk 36
+            ndkVersion '29.0.13113456'
+            defaultConfig { minSdk 24; targetSdk 36 }
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_21
+                targetCompatibility JavaVersion.VERSION_21
+            }
+        }
+    }
+}

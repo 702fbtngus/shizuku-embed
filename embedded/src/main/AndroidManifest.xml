@@ -1,0 +1,63 @@
+<!-- Derived from upstream manager manifest; modified for OpenLock embedding. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <permission-group android:name="${applicationId}.shizuku.permission-group.API" android:description="@string/permission_group_description" android:icon="@drawable/ic_system_icon" android:label="@string/permission_group_label" />
+    <permission android:name="${applicationId}.shizuku.permission.MANAGER" android:protectionLevel="signature" />
+    <uses-permission android:name="${applicationId}.shizuku.permission.MANAGER" />
+    <permission android:name="${applicationId}.shizuku.permission.API_V23" android:description="@string/permission_description" android:icon="@drawable/ic_system_icon" android:label="@string/permission_label" android:permissionGroup="${applicationId}.shizuku.permission-group.API" android:protectionLevel="dangerous" />
+    <uses-permission android:name="${applicationId}.shizuku.permission.API_V23" tools:node="remove" />
+    <application tools:ignore="GoogleAppIndexingWarning">
+        <activity android:name="moe.shizuku.manager.MainActivity" android:exported="false" android:process=":shizuku" android:theme="@style/AppTheme">
+            </activity>
+        <activity android:name="moe.shizuku.manager.management.ApplicationManagementActivity" android:label="@string/home_app_management_title" android:process=":shizuku" android:theme="@style/AppTheme" />
+        <activity android:name="moe.shizuku.manager.adb.AdbPairingTutorialActivity" android:label="@string/adb_pairing" android:process=":shizuku" android:theme="@style/AppTheme" />
+        <activity android:name="moe.shizuku.manager.shell.ShellTutorialActivity" android:label="@string/home_terminal_title" android:process=":shizuku" android:theme="@style/AppTheme" />
+        <activity android:name="moe.shizuku.manager.settings.SettingsActivity" android:exported="false" android:label="@string/settings_title" android:process=":shizuku" android:theme="@style/AppTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
+            </intent-filter>
+        </activity>
+        <activity android:name="moe.shizuku.manager.starter.StarterActivity" android:label="@string/starter" android:process=":shizuku" android:theme="@style/AppTheme" />
+        <activity android:name="moe.shizuku.manager.authorization.RequestPermissionActivity" android:directBootAware="true" android:excludeFromRecents="true" android:exported="true" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" android:theme="@style/GrantPermissions" android:process=":shizuku">
+            <intent-filter>
+                <action android:name="${applicationId}.intent.action.REQUEST_PERMISSION" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity android:name="moe.shizuku.manager.legacy.ShellRequestHandlerActivity" android:directBootAware="true" android:excludeFromRecents="true" android:exported="false" android:theme="@style/GrantPermissions" android:process=":shizuku">
+            <intent-filter>
+                <action android:name="rikka.shizuku.intent.action.REQUEST_BINDER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity android:name="moe.shizuku.manager.legacy.LegacyIsNotSupportedActivity" android:excludeFromRecents="true" android:exported="false" android:permission="${applicationId}.shizuku.permission.API" android:theme="@style/GrantPermissions" android:process=":shizuku">
+            <intent-filter>
+                <action android:name="${applicationId}.intent.action.REQUEST_AUTHORIZATION" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <service android:name="moe.shizuku.manager.adb.AdbPairingService" android:enabled="true" android:exported="false" android:foregroundServiceType="shortService" android:process=":shizuku" />
+        <receiver android:name="moe.shizuku.manager.receiver.BootCompleteReceiver" android:directBootAware="true" android:enabled="true" android:exported="true" android:process=":shizuku">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name="moe.shizuku.manager.receiver.ShizukuReceiver" android:directBootAware="true" android:enabled="true" android:exported="false" android:process=":shizuku">
+            <intent-filter>
+                <action android:name="rikka.shizuku.intent.action.REQUEST_BINDER" />
+            </intent-filter>
+        </receiver>
+        <provider android:name="moe.shizuku.manager.ShizukuManagerProvider" android:authorities="${applicationId}.shizuku" android:directBootAware="true" android:enabled="true" android:exported="true" android:multiprocess="false" android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" android:process=":shizuku" />
+        <provider android:name="moe.shizuku.manager.integration.ShizukuInitProvider" android:authorities="${applicationId}.shizuku.init" android:exported="false" android:directBootAware="true" android:initOrder="100" android:process=":shizuku" />
+    </application>
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" tools:node="remove" />
+</manifest>

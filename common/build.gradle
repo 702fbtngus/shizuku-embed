@@ -1,3 +1,4 @@
+// Modified for OpenLock embedding; standalone behavior is retained.
 plugins {
     id 'com.android.library'
 }
@@ -5,7 +6,14 @@ plugins {
 android {
     namespace 'rikka.shizuku.common'
     buildFeatures {
-        buildConfig = false
+        buildConfig = true
+    }
+    defaultConfig {
+        buildConfigField 'String', 'MANAGER_APPLICATION_ID', '"' + rootProject.ext.managerApplicationId + '"'
+        buildConfigField 'String', 'PERMISSION_PREFIX', '"' + rootProject.ext.managerPermissionPrefix + '"'
+        buildConfigField 'String', 'SERVER_PROCESS_NAME', '"' + rootProject.ext.serverProcessName + '"'
+        buildConfigField 'String', 'SERVER_CONFIG_NAME', '"' + rootProject.ext.serverConfigName + '"'
+        buildConfigField 'boolean', 'OPENLOCK_EMBEDDED', rootProject.ext.openlockEmbedded.toString()
     }
 }
 

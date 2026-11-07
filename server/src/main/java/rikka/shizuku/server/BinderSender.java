@@ -1,3 +1,4 @@
+// Modified for OpenLock: isolate embedded host identity and lifecycle.
 package rikka.shizuku.server;
 
 import static android.app.ActivityManagerHidden.UID_OBSERVER_ACTIVE;
@@ -29,8 +30,8 @@ public class BinderSender {
 
     private static final Logger LOGGER = new Logger("BinderSender");
 
-    private static final String PERMISSION_MANAGER = "moe.shizuku.manager.permission.MANAGER";
-    private static final String PERMISSION = "moe.shizuku.manager.permission.API_V23";
+    private static final String PERMISSION_MANAGER = rikka.shizuku.common.BuildConfig.PERMISSION_PREFIX + ".MANAGER";
+    private static final String PERMISSION = rikka.shizuku.common.BuildConfig.PERMISSION_PREFIX + ".API_V23";
 
     private static ShizukuService sShizukuService;
 

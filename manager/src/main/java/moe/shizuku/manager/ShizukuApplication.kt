@@ -10,7 +10,8 @@ import org.lsposed.hiddenapibypass.HiddenApiBypass
 import rikka.core.util.BuildUtils.atLeast30
 import rikka.material.app.LocaleDelegate
 
-lateinit var application: ShizukuApplication
+// Modified for OpenLock embedding: the host owns its Application class.
+lateinit var application: Application
 
 class ShizukuApplication : Application() {
 
@@ -27,6 +28,14 @@ class ShizukuApplication : Application() {
                 System.loadLibrary("adb")
             }
         }
+
+        @JvmStatic
+        fun initialize(host: Application) {
+            application = host
+            ShizukuSettings.initialize(host)
+            LocaleDelegate.defaultLocale = ShizukuSettings.getLocale()
+            AppCompatDelegate.setDefaultNightMode(ShizukuSettings.getNightMode())
+        }
     }
 
     private fun init(context: Context?) {
@@ -37,8 +46,7 @@ class ShizukuApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        application = this
-        init(this)
+        initialize(this)
     }
 
 }

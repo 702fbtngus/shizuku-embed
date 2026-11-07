@@ -1,0 +1,15 @@
+pluginManagement {
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+    plugins { id 'com.android.application' version '8.11.1' }
+}
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io'; content { includeGroup 'com.github.topjohnwu.libsu' } }
+    }
+}
+rootProject.name = 'openlock-shizuku-composite-test'
+include ':app'
+project(':app').projectDir = file('../integration-host')
+includeBuild('..')

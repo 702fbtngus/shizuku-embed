@@ -11,3 +11,8 @@
 /manager/signing.properties
 /out
 /signing.properties
+
+# OpenLock embedding build outputs
+**/build/
+**/.cxx/
+**/__pycache__/

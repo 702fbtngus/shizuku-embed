@@ -56,3 +56,36 @@ and auditing component entry points; adding a Git submodule does not do this.
 Keep upstream `master` separate from this integration branch. Merge upstream
 updates deliberately, verify the standalone and embedded builds, then update the
 OpenLock parent repository's submodule pointer. Do not follow upstream HEAD in CI.
+
+## Phase 2: embedded original UI
+
+The new `embedded` library consumes the original manager's Java/Kotlin sources,
+resources, assets and native CMake project. The original manager build and this
+library share `manager/module.gradle`. Composite consumers select embedded mode;
+direct builds keep the standalone manager. The `api` submodule is unchanged.
+
+An init provider initializes the upstream manager in the host's `:shizuku`
+process, including for its boot receiver and pairing service. It does not replace
+the host Application or initialize ADB/UI globals on the protection main thread.
+The native starter, manager Binder identity, declared permissions, server name
+and server config are scoped to the OpenLock host. Protocol Binder payload keys
+remain compatible internally. Embedded provider retries never force-stop the
+host package. Entry Activities are internal; legacy external rish entry points
+are disabled in this phase. This is not a drop-in server for existing third-party
+clients of the official Shizuku app.
+
+The `Embedded composite host` job builds Debug and Release consumers using the
+same composite dependency mechanism as OpenLock. `verify_apk.py` examines the
+actual APK for correct host identity, nonexported home, isolated process, custom
+permissions, extracted native executables, scoped starter strings and rish dex.
+The small host is a compilation/packaging fixture and is never distributed.
+
+```sh
+./gradlew --no-daemon -p integration-consumer :app:assembleDebug :app:assembleRelease
+python3 integration-consumer/verify_apk.py integration-host/build/outputs/apk/debug/app-debug.apk
+```
+
+These checks do not replace the full Flutter host build or real-device startup,
+pairing, Back navigation, authentication and reboot tests. OpenLock's own PIN
+menu gate and recovery controls belong to the parent repository. Automatic
+permission repair is not connected to this backend yet.

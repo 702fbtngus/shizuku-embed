@@ -1,3 +1,4 @@
+// Modified for OpenLock embedding; standalone behavior is retained.
 pluginManagement {
     repositories {
         google()
@@ -41,7 +42,14 @@ dependencyResolutionManagement {
 }
 
 include ':server', ':starter', ':shell'
-include ':manager'
+// A composite consumer embeds the manager; a direct checkout still builds the
+// original standalone app. -PopenlockEmbedded=true enables the test host in CI.
+def embedded = gradle.parent != null || providers.gradleProperty('openlockEmbedded').orNull == 'true'
+if (embedded) {
+    include ':embedded', ':integration-host'
+} else {
+    include ':manager'
+}
 include ':common'
 
 def root = "api"

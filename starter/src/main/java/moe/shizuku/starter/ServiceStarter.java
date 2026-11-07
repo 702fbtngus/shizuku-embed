@@ -1,3 +1,4 @@
+// Modified for OpenLock: isolate embedded host identity and lifecycle.
 package moe.shizuku.starter;
 
 import android.content.IContentProvider;
@@ -92,7 +93,7 @@ public class ServiceStarter {
     }
 
     private static boolean sendBinder(IBinder binder, String token, boolean retry) {
-        String packageName = "moe.shizuku.privileged.api";
+        String packageName = rikka.shizuku.common.BuildConfig.MANAGER_APPLICATION_ID;
         String name = packageName + ".shizuku";
         int userId = 0;
         IContentProvider provider = null;
@@ -106,7 +107,7 @@ public class ServiceStarter {
             if (!provider.asBinder().pingBinder()) {
                 Log.e(TAG, String.format("provider is dead %s %d", name, userId));
 
-                if (retry) {
+                if (retry && !rikka.shizuku.common.BuildConfig.OPENLOCK_EMBEDDED) {
                     // For unknown reason, sometimes this could happens
                     // Kill Shizuku app and try again could work
                     ActivityManagerApis.forceStopPackageNoThrow(packageName, userId);
