@@ -28,7 +28,7 @@ import rikka.shizuku.Shizuku
 class RecoveryService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) { BackendRecovery.networkAvailable() }
+        override fun onAvailable(network: Network) { BackendRecovery.retryNow() }
     }
 
     override fun onCreate() {

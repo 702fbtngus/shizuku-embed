@@ -43,6 +43,17 @@ class HotspotLeaseTest {
         assertEquals(1, first.closed.get())
     }
 
+    @Test fun duplicateDeliveryOfTheSameReservationDoesNotCloseItTwice() {
+        val lease = HotspotLease()
+        val reservation = Reservation()
+        assertTrue(lease.attach(reservation))
+        assertTrue(lease.attach(reservation))
+        assertEquals(0, reservation.closed.get())
+        lease.close()
+        assertFalse(lease.attach(reservation))
+        assertEquals(1, reservation.closed.get())
+    }
+
     @Test fun callbackRacingCancellationAlwaysClosesExactlyOnce() {
         val executor = Executors.newFixedThreadPool(2)
         try {

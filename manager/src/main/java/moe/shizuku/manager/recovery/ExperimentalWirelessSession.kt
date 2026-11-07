@@ -44,10 +44,10 @@ internal class ExperimentalWirelessSession(private val context: Context) {
         record("${Build.MANUFACTURER} ${Build.MODEL}; API ${Build.VERSION.SDK_INT}; package=${context.packageName}.")
         record("WSS and hotspot permission granted; TCP on start=${RecoverySettings.tcpEnabled}.")
         saveLog()
-        output("Experimental offline startup: requesting a temporary local-only hotspot…")
+        output("Requesting a temporary local-only hotspot for offline startup...")
         val hotspot = requestHotspot()
         record(if (hotspot) "Local-only hotspot ready." else "Continuing without a hotspot interface.")
-        output("Experimental offline startup: searching for ADB for up to 120 seconds…")
+        output("Searching for offline ADB for up to 120 seconds...")
         nudger = CoroutineScope(currentCoroutineContext()).launch(Dispatchers.IO) {
             val resolver = context.contentResolver
             val deadline = SystemClock.elapsedRealtime() + RecoveryPolicy.EXPERIMENT_WINDOW_MS
@@ -133,7 +133,7 @@ internal class ExperimentalWirelessSession(private val context: Context) {
     suspend fun close() {
         stopNudging()
         lease.close()
-        record("Finished; wireless debugging writes=$writes; hotspot reservation released.")
+        record("Finished; wireless debugging writes=$writes; hotspot cleanup requested.")
         saveLog()
     }
 

@@ -9,20 +9,30 @@ internal class HotspotLease : Closeable {
     private var reservation: AutoCloseable? = null
 
     fun attach(value: AutoCloseable): Boolean {
+        var rejected = false
         val accepted = synchronized(lock) {
-            if (closed || reservation != null) false else {
-                reservation = value
-                true
+            when {
+                reservation === value -> !closed
+                closed || reservation != null -> {
+                    rejected = true
+                    false
+                }
+                else -> {
+                    reservation = value
+                    true
+                }
             }
         }
-        if (!accepted) runCatching { value.close() }
+        if (rejected) runCatching { value.close() }
         return accepted
     }
 
     override fun close() {
         val value = synchronized(lock) {
-            closed = true
-            reservation.also { reservation = null }
+            if (closed) null else {
+                closed = true
+                reservation
+            }
         }
         runCatching { value?.close() }
     }

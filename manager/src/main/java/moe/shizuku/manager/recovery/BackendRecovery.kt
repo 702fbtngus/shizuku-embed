@@ -77,11 +77,10 @@ object BackendRecovery {
         RecoveryService.scheduleJob(application)
     }
 
-    fun networkAvailable() {
+    fun retryNow() {
         scope.launch {
-            if (mutex.tryLock()) {
-                try { nextAttempt = 0 } finally { mutex.unlock() }
-            }
+            mutex.lock()
+            try { nextAttempt = 0 } finally { mutex.unlock() }
             tick()
         }
     }
