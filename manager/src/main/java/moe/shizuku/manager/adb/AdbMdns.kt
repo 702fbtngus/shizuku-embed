@@ -42,6 +42,8 @@ class AdbMdns(
 
     private fun onDiscoveryStart() {
         registered = true
+        // A bounded recovery attempt may have stopped before discovery started.
+        if (!running) runCatching { nsdManager.stopServiceDiscovery(listener) }
     }
 
     private fun onDiscoveryStop() {
@@ -49,6 +51,7 @@ class AdbMdns(
     }
 
     private fun onServiceFound(info: NsdServiceInfo) {
+        if (!running) return
         nsdManager.resolveService(info, ResolveListener(this))
     }
 

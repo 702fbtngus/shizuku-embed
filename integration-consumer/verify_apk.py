@@ -40,7 +40,8 @@ assert init.get(ns+'initOrder') == '100'
 recovery = components['moe.shizuku.manager.recovery.RecoveryService']
 assert recovery.get(ns+'exported') == 'false'
 assert recovery.get(ns+'directBootAware') == 'true'
-assert recovery.get(ns+'foregroundServiceType') == 'specialUse'
+service_type = recovery.get(ns+'foregroundServiceType')
+assert service_type == 'specialUse' or int(service_type, 0) == 0x40000000, service_type
 backstop = components['moe.shizuku.manager.recovery.RecoveryJobService']
 assert backstop.get(ns+'permission') == 'android.permission.BIND_JOB_SERVICE'
 assert backstop.get(ns+'directBootAware') == 'true'

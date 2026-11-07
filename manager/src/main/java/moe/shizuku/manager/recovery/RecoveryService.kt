@@ -9,6 +9,8 @@ import android.app.job.JobInfo
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -25,6 +27,9 @@ import rikka.shizuku.Shizuku
 /** An opt-in, visible watchdog. The persisted job backs up process/foreground-start failures. */
 class RecoveryService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) { BackendRecovery.networkAvailable() }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -34,6 +39,9 @@ class RecoveryService : Service() {
                 getString(R.string.recovery_channel), NotificationManager.IMPORTANCE_LOW))
         }
         startForeground(NOTIFICATION_ID, notification())
+        runCatching {
+            getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(networkCallback)
+        }
         scope.launch {
             while (isActive) {
                 if (!RecoverySettings.autoAllowed) break
@@ -51,6 +59,7 @@ class RecoveryService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onDestroy() {
         scope.cancel()
+        runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) }
         super.onDestroy()
     }
 

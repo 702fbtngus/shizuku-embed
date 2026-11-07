@@ -115,7 +115,7 @@ abstract class HomeActivity : AppBarActivity() {
                 true
             }
             R.id.action_stop -> {
-                if (!Shizuku.pingBinder()) {
+                if (!Shizuku.pingBinder() && !moe.shizuku.manager.recovery.RecoverySettings.autoAllowed) {
                     return true
                 }
                 MaterialAlertDialogBuilder(this)

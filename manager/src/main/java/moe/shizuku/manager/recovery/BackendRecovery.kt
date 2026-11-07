@@ -54,19 +54,33 @@ object BackendRecovery {
         RecoverySettings.reconcileBoot()
         Shizuku.addBinderReceivedListenerSticky {
             scope.launch {
-                if (RecoverySettings.stopped && SystemClock.elapsedRealtime() < stopLateBinderUntil) {
-                    runCatching { Shizuku.exit() }
-                } else {
-                    mutex.lock()
-                    try { recordRunning() } finally { mutex.unlock() }
-                    RecoveryService.refresh(application)
-                }
+                mutex.lock()
+                try {
+                    if (RecoverySettings.stopped && SystemClock.elapsedRealtime() < stopLateBinderUntil) {
+                        runCatching { Shizuku.exit() }
+                    } else {
+                        recordRunning()
+                    }
+                } finally { mutex.unlock() }
+                RecoveryService.refresh(application)
             }
         }
         Shizuku.addBinderDeadListener {
-            scope.launch { RecoveryService.refresh(application) }
+            scope.launch {
+                RecoveryService.refresh(application)
+                tick()
+            }
         }
         RecoveryService.scheduleJob(application)
+    }
+
+    fun networkAvailable() {
+        scope.launch {
+            if (mutex.tryLock()) {
+                try { nextAttempt = 0 } finally { mutex.unlock() }
+            }
+            tick()
+        }
     }
 
     private fun recordRunning() {
@@ -140,10 +154,11 @@ object BackendRecovery {
                 start(ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ROOT,
                     null, 0, false, ticket, RecoverySettings::status)
             } catch (e: CancellationException) {
-                throw e
+                currentCoroutineContext().ensureActive()
+                return
             } catch (e: Exception) {
                 if (ticket != generation.get()) return
-                val authorization = e is AdbAuthorizationException || e is SSLHandshakeException || e is AdbKeyException
+                val authorization = e is AdbAuthorizationException || e is SSLHandshakeException || e is AdbKeyException || e is RootUnavailableException
                 if (authorization || e is ServerStartException && ++startFailures >= 3) {
                     RecoverySettings.prefs.edit().putBoolean(RecoverySettings.PAUSED, true).apply()
                     RecoverySettings.status("Automatic recovery paused. Open Shizuku, check pairing and start manually. ${e.message}")
@@ -160,13 +175,13 @@ object BackendRecovery {
 
     private suspend fun start(root: Boolean, host: String?, port: Int, manual: Boolean,
                               ticket: Long, output: (String) -> Unit) {
-        if (!application.getSystemService(UserManager::class.java).isUserUnlocked) {
+        if (!root && !application.getSystemService(UserManager::class.java).isUserUnlocked) {
             error("Unlock the device once before restoring the ADB key.")
         }
         checkCurrent(ticket)
         if (root) {
             output("Starting with root…")
-            if (!Shell.getShell().isRoot) error("Root access is unavailable.")
+            if (!Shell.getShell().isRoot) throw RootUnavailableException()
             checkCurrent(ticket)
             val result = Shell.cmd(Starter.internalCommand).exec()
             checkCurrent(ticket)
@@ -290,5 +305,6 @@ object BackendRecovery {
         if (generation.get() != ticket) throw CancellationException("Start cancelled.")
     }
 
+    private class RootUnavailableException : Exception("Root access is unavailable. Check authorization and start manually.")
     private class ServerStartException(message: String) : Exception(message)
 }
