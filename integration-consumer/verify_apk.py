@@ -62,4 +62,6 @@ with zipfile.ZipFile(apk) as archive:
                    if name.startswith('classes') and name.endswith('.dex'))
     assert config_name.encode() in dex
     assert 'assets/rish_shizuku.dex' in names
+    assert 'assets/open_source/shizuku-next/LICENSE' in names
+    assert 'assets/open_source/shizuku-next/NOTICE.md' in names
 print('Passed APK checks: host identity, original UI, isolated process, private entry, permissions, native executables and rish dex.')

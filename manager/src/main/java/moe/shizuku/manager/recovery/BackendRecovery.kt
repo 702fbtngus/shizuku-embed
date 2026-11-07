@@ -138,7 +138,7 @@ object BackendRecovery {
         }
     }
 
-    /** A false result means an endpoint is unavailable, rather than a broken server launch. */
+    /** Performs one automatic attempt, respecting backoff and manual stop. */
     suspend fun tick() {
         RecoverySettings.reconcileBoot()
         val ticket = generation.get()
@@ -158,8 +158,10 @@ object BackendRecovery {
                 return
             } catch (e: Exception) {
                 if (ticket != generation.get()) return
-                val authorization = e is AdbAuthorizationException || e is SSLHandshakeException || e is AdbKeyException || e is RootUnavailableException
-                if (authorization || e is ServerStartException && ++startFailures >= 3) {
+                val authorization = e is AdbAuthorizationException || e is SSLHandshakeException ||
+                    e is AdbKeyException || e is RootUnavailableException
+                if (e is ServerStartException) startFailures += 1
+                if (authorization || startFailures >= 3) {
                     RecoverySettings.prefs.edit().putBoolean(RecoverySettings.PAUSED, true).apply()
                     RecoverySettings.status("Automatic recovery paused. Open Shizuku, check pairing and start manually. ${e.message}")
                 } else {
@@ -181,7 +183,10 @@ object BackendRecovery {
         checkCurrent(ticket)
         if (root) {
             output("Starting with root…")
-            if (!Shell.getShell().isRoot) throw RootUnavailableException()
+            if (!Shell.getShell().isRoot) {
+                Shell.getCachedShell()?.close()
+                throw RootUnavailableException()
+            }
             checkCurrent(ticket)
             val result = Shell.cmd(Starter.internalCommand).exec()
             checkCurrent(ticket)
@@ -216,7 +221,12 @@ object BackendRecovery {
                 }
                 checkCurrent(ticket)
                 output("Starting privileged server…")
-                client.shellCommand(Starter.internalCommand) { output(String(it)) }
+                try {
+                    client.shellCommand(Starter.internalCommand) { output(String(it)) }
+                } catch (e: Exception) {
+                    checkCurrent(ticket)
+                    throw ServerStartException("ADB starter failed. ${e.message}")
+                }
             } finally {
                 client.close()
                 activeClient = null
