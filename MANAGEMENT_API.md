@@ -67,6 +67,12 @@ Binder is still exiting; keep reading live status. A successful pairing timestam
 only records this API's last success and does not prove Android still trusts the
 key. Older notification-based pairing does not populate that timestamp.
 
+Restart captures the previous Binder and confirms its termination before starting
+again. The synchronous exit call can disconnect before its reply arrives. That
+exception is tolerated only after the captured server has actually stopped.
+Permission errors, cancellation and a server that stays alive still fail or cancel
+the request. Shutdown confirmation is bounded to five seconds.
+
 Operation error codes include `invalid_pairing_code`, `key_unavailable`,
 `permission_required`, `connection_timeout`, `pairing_failed`, `start_failed`.
 Validation errors include `invalid_settings`, `invalid_port`, `busy` and

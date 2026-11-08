@@ -142,14 +142,14 @@ object BackendRecovery {
             RecoverySettings.trigger("manual")
             RecoverySettings.resetExperiment()
             if (restart && Shizuku.pingBinder()) {
+                val previousBinder = Shizuku.getBinder()
                 output("Stopping the previous service...")
-                Shizuku.exit()
-                val deadline = SystemClock.elapsedRealtime() + 5000
-                while (Shizuku.pingBinder() && SystemClock.elapsedRealtime() < deadline) {
-                    checkCurrent(ticket)
-                    delay(50)
-                }
-                if (Shizuku.pingBinder()) throw ServerStartException("The previous service did not stop.")
+                stopBackendForRestart(
+                    requestStop = { Shizuku.exit() },
+                    isPreviousAlive = { previousBinder?.pingBinder() == true },
+                    checkCurrent = { checkCurrent(ticket) },
+                )
+                output("The previous service stopped. Starting again...")
             }
             start(root, host, port, true, ticket, output)
         } catch (e: CancellationException) {
