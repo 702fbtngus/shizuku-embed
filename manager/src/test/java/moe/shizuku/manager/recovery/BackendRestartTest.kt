@@ -81,7 +81,11 @@ class BackendRestartTest {
             val result = runCatching {
                 awaitBackendReplacement<BinderToken>(null, { throw failure }, { it.alive }, {})
             }
-            assertSame(failure, result.exceptionOrNull())
+            val actual = result.exceptionOrNull()
+            assertNotNull(actual)
+            // Coroutine debug stack recovery can copy the exception instance.
+            assertEquals(failure.javaClass, actual!!.javaClass)
+            assertEquals(failure.message, actual.message)
         }
     }
 
