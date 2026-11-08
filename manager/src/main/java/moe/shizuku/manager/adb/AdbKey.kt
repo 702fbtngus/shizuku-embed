@@ -38,7 +38,11 @@ import javax.net.ssl.X509ExtendedTrustManager
 
 private const val TAG = "AdbKey"
 
-class AdbKey(private val adbKeyStore: AdbKeyStore, name: String) {
+class AdbKey @JvmOverloads constructor(
+    private val adbKeyStore: AdbKeyStore,
+    name: String,
+    private val allowKeyCreation: Boolean = true,
+) {
 
     companion object {
 
@@ -106,6 +110,7 @@ class AdbKey(private val adbKeyStore: AdbKeyStore, name: String) {
         keyStore.load(null)
 
         return keyStore.getKey(ENCRYPTION_KEY_ALIAS, null) ?: run {
+            check(allowKeyCreation) { "Saved ADB encryption key is unavailable." }
             val parameterSpec = KeyGenParameterSpec.Builder(ENCRYPTION_KEY_ALIAS, KeyProperties.PURPOSE_DECRYPT or KeyProperties.PURPOSE_ENCRYPT)
                     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
@@ -158,6 +163,7 @@ class AdbKey(private val adbKeyStore: AdbKeyStore, name: String) {
             }
         }
         if (privateKey == null) {
+            check(allowKeyCreation) { "Saved ADB private key is unavailable." }
             val keyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA)
             keyPairGenerator.initialize(RSAKeyGenParameterSpec(2048, RSAKeyGenParameterSpec.F4))
             val keyPair = keyPairGenerator.generateKeyPair()

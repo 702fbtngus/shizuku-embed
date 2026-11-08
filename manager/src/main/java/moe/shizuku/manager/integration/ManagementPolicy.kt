@@ -33,4 +33,6 @@ object ManagementPolicy {
 
     fun shouldStopBackend(operation: String, explicitStop: Boolean = false) =
         explicitStop || operation == "start"
+
+    fun notificationPairingActive(state: String) = state in setOf("searching", "code_required", "pairing")
 }

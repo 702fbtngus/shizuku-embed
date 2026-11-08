@@ -27,6 +27,8 @@ import moe.shizuku.manager.adb.AdbKeyException
 import moe.shizuku.manager.adb.AdbMdns
 import moe.shizuku.manager.adb.PreferenceAdbKeyStore
 import moe.shizuku.manager.application
+import moe.shizuku.manager.adb.AdbPairingService
+import moe.shizuku.manager.integration.ManagementPolicy
 import moe.shizuku.manager.starter.Starter
 import moe.shizuku.manager.utils.EnvironmentUtils
 import rikka.shizuku.Shizuku
@@ -101,6 +103,7 @@ object BackendRecovery {
     }
 
     fun stop() {
+        AdbPairingService.stopSearch(application)
         RecoverySettings.prefs.edit().putBoolean(RecoverySettings.STOPPED, true)
             .putBoolean(RecoverySettings.BOOT_PENDING, false).apply()
         if (mutex.isLocked) stopLateBinderUntil = SystemClock.elapsedRealtime() + 30_000
@@ -125,6 +128,12 @@ object BackendRecovery {
         }
     }
 
+    fun pauseForPairing() {
+        generation.incrementAndGet()
+        activeExperiment?.cancel()
+        activeClient?.close()
+    }
+
     suspend fun startManual(root: Boolean, host: String? = null, port: Int = 0,
                             restart: Boolean = false, output: (String) -> Unit) {
         currentCoroutineContext().ensureActive()
@@ -134,6 +143,7 @@ object BackendRecovery {
         mutex.lock()
         try {
             checkCurrent(ticket)
+            AdbPairingService.stopSearch(application)
             RecoverySettings.prefs.edit().putBoolean(RecoverySettings.STOPPED, false)
                 .putBoolean(RecoverySettings.PAUSED, false).apply()
             stopLateBinderUntil = 0
@@ -165,9 +175,9 @@ object BackendRecovery {
     suspend fun tick() {
         RecoverySettings.reconcileBoot()
         val ticket = generation.get()
-        if (!RecoverySettings.autoAllowed || !mutex.tryLock()) return
+        if (!RecoverySettings.autoAllowed || ManagementPolicy.notificationPairingActive(AdbPairingService.state) || !mutex.tryLock()) return
         try {
-            if (!RecoverySettings.autoAllowed) return
+            if (!RecoverySettings.autoAllowed || ManagementPolicy.notificationPairingActive(AdbPairingService.state)) return
             if (Shizuku.pingBinder()) {
                 recordRunning()
                 return
@@ -392,6 +402,62 @@ object BackendRecovery {
             client.close()
             activeClient = null
             throw e
+        }
+    }
+
+    /** Read-only access check. Never enables debugging, starts a server or requests trust. */
+    suspend fun probeAdbAccess(): String {
+        if (!mutex.tryLock()) return "unknown"
+        val ticket = generation.get()
+        var discovery: AdbMdns? = null
+        try {
+            if (!application.getSystemService(UserManager::class.java).isUserUnlocked) return "locked"
+            val keyStore = PreferenceAdbKeyStore(RecoverySettings.prefs)
+            if (keyStore.get() == null) return "pairing_required"
+            val key = try { AdbKey(keyStore, "shizuku", allowKeyCreation = false) }
+                catch (_: Exception) { return "key_unavailable" }
+            val discovered = AtomicInteger(-1)
+            if (Build.VERSION.SDK_INT >= 30) {
+                discovery = AdbMdns(application, AdbMdns.TLS_CONNECT) { discovered.set(it) }
+                runCatching { discovery.start() }
+            }
+            val attempted = HashSet<Int>()
+            val deadline = SystemClock.elapsedRealtime() + 1500
+            do {
+                checkCurrent(ticket)
+                val ports = RecoveryPolicy.ports(EnvironmentUtils.getAdbTcpPort(), RecoverySettings.tcpEnabled,
+                    RecoverySettings.port, RecoverySettings.prefs.getInt("recovery_last_port", -1),
+                    RecoverySettings.prefs.getBoolean("recovery_last_tls", true),
+                    RecoverySettings.prefs.getInt("recovery_last_boot", -1), RecoverySettings.bootCount) +
+                    listOf(SystemProperties.getInt("service.adb.tls.port", -1), discovered.get())
+                for (port in ports.filter(RecoveryPolicy::validPort).distinct()) {
+                    checkCurrent(ticket)
+                    if (!attempted.add(port) || !listening(port)) continue
+                    val client = AdbClient("127.0.0.1", port, key, timeoutMs = 1500, allowAuthorizationPrompt = false)
+                    activeClient = client
+                    try {
+                        checkCurrent(ticket)
+                        client.connect()
+                        checkCurrent(ticket)
+                        return "authorized"
+                    } catch (e: AdbAuthorizationException) {
+                        checkCurrent(ticket)
+                        return "pairing_required"
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        checkCurrent(ticket)
+                    } finally {
+                        client.close()
+                        activeClient = null
+                    }
+                }
+                delay(100)
+            } while (SystemClock.elapsedRealtime() < deadline)
+            return "unreachable"
+        } finally {
+            runCatching { discovery?.stop() }
+            mutex.unlock()
         }
     }
 

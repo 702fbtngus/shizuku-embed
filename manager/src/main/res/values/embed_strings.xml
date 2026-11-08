@@ -2,4 +2,7 @@
     <string name="embed_control_channel">Shizuku operations</string>
     <string name="embed_control_title">Shizuku is connecting</string>
     <string name="embed_control_description">A requested pairing or startup operation is in progress.</string>
+    <string name="embed_pairing_search_help">Open Wireless debugging and keep the pairing-code dialog open. The pairing port is detected automatically.</string>
+    <string name="embed_pairing_reply_help">Keep the Settings dialog open. Enter its six-digit code here without returning to the app.</string>
+    <string name="embed_pairing_retry_help">Open a fresh pairing-code dialog and try again. Enter the code from the notification while Settings stays open.</string>
 </resources>

@@ -4,6 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ManagementPolicyTest {
+    @Test fun notificationSetupBlocksAutomaticStartupOnlyWhileActive() {
+        for (state in listOf("searching", "code_required", "pairing")) {
+            assertTrue(ManagementPolicy.notificationPairingActive(state))
+        }
+        for (state in listOf("idle", "paired", "error")) {
+            assertFalse(ManagementPolicy.notificationPairingActive(state))
+        }
+    }
+
     @Test fun partialSettingsUpdatesPreserveAWellDefinedContract() {
         ManagementPolicy.validateSettings(mapOf("tcpEnabled" to true, "tcpPort" to 5555))
         ManagementPolicy.validateSettings(mapOf("startOnBoot" to false))

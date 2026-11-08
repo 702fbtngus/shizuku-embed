@@ -9,12 +9,13 @@ import moe.shizuku.server.IShizukuService
 /** Access from the host UID. Call on a worker thread after host authentication. */
 object EmbeddedShizuku {
     /** Versioned, host-UID-only management. Call off the main thread after host authentication.
-     * Commands: snapshot, configure, start, pair, cancel, stop, report. Long operations
+     * Commands include snapshot/refresh_connection, configure, start, pair,
+     * pair_notification/cancel_pair_notification, cancel, stop and report. Long operations
      * return immediately; observe busy/operation/output in subsequent snapshots.
      */
     @JvmStatic
     fun manage(context: Context, command: String, arguments: Bundle = Bundle()): Bundle {
-        require(command in setOf("snapshot", "configure", "start", "pair", "cancel", "stop", "report")) { "unknown_command" }
+        require(command in setOf("snapshot", "refresh_connection", "configure", "start", "pair", "pair_notification", "cancel_pair_notification", "cancel", "stop", "report")) { "unknown_command" }
         return context.contentResolver.call(Uri.parse("content://${context.packageName}.shizuku"),
             BackendManagement.METHOD, command, arguments) ?: error("management_unavailable")
     }

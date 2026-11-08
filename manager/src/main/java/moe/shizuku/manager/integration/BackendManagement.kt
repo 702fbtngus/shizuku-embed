@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,6 +21,7 @@ import kotlinx.coroutines.launch
 import moe.shizuku.manager.ShizukuSettings
 import moe.shizuku.manager.adb.AdbKey
 import moe.shizuku.manager.adb.AdbPairingClient
+import moe.shizuku.manager.adb.AdbPairingService
 import moe.shizuku.manager.adb.PreferenceAdbKeyStore
 import moe.shizuku.manager.application
 import moe.shizuku.manager.receiver.BootCompleteReceiver
@@ -41,12 +44,44 @@ object BackendManagement {
     private val output = StringBuilder()
     @Volatile private var pairing: AdbPairingClient? = null
     @Volatile private var activeJob: Job? = null
+    internal data class PairingOutcome(val success: Boolean, val error: String?)
+    internal data class NotificationPairingRequest(val ticket: Long, val result: CompletableDeferred<PairingOutcome>)
+    private var notificationPairing: NotificationPairingRequest? = null
+    private var adbAccess = "unknown"
+    private var accessCheckedAt = 0L
+    private var accessChecking = false
+    private var lastWirelessSetting: Boolean? = null
 
     fun call(command: String?, args: Bundle): Bundle = when (command) {
-        "snapshot" -> snapshot()
+        "snapshot" -> {
+            refreshConnection()
+            snapshot()
+        }
+        "refresh_connection" -> {
+            refreshConnection(force = true)
+            snapshot()
+        }
         "configure" -> configure(args)
         "start", "pair" -> enqueue(command, args)
+        "pair_notification" -> {
+            require(args.isEmpty) { "invalid_arguments" }
+            require(Build.VERSION.SDK_INT >= 30) { "unsupported" }
+            check(AdbPairingService.notificationsEnabled(application)) { "notifications_required" }
+            synchronized(lock) { check(!busy) { "busy" } }
+            try {
+                AdbPairingService.startSearch(application)
+            } catch (e: Exception) {
+                throw IllegalStateException("foreground_start_denied", e)
+            }
+            snapshot()
+        }
+        "cancel_pair_notification" -> {
+            require(args.isEmpty) { "invalid_arguments" }
+            AdbPairingService.stopSearch(application)
+            snapshot()
+        }
         "cancel" -> {
+            AdbPairingService.stopSearch(application)
             val starting = synchronized(lock) {
                 if (busy) operation = "cancelling"
                 busy && ManagementPolicy.shouldStopBackend(activeKind)
@@ -57,6 +92,7 @@ object BackendManagement {
             snapshot()
         }
         "stop" -> {
+            AdbPairingService.stopSearch(application)
             synchronized(lock) { operation = if (busy) "cancelling" else "stopped" }
             activeJob?.cancel()
             pairing?.cancel()
@@ -67,6 +103,8 @@ object BackendManagement {
             putString("report", buildString {
                 appendLine("Shizuku Embed management v${ManagementPolicy.VERSION}")
                 appendLine("Startup implementation=native replacement v2")
+                appendLine("Wireless debugging=${wirelessDebugging()} ADB access=${synchronized(lock) { adbAccess }}")
+                appendLine("Pairing notification=${AdbPairingService.state} enabled=${AdbPairingService.notificationsEnabled(application)}")
                 appendLine(RecoverySettings.statusReport("No recovery attempt recorded."))
                 appendLine()
                 appendLine(RecoverySettings.experimentReport("No offline startup attempt recorded."))
@@ -112,7 +150,8 @@ object BackendManagement {
         return snapshot()
     }
 
-    private fun enqueue(kind: String, args: Bundle): Bundle {
+    private fun enqueue(kind: String, args: Bundle, completion: CompletableDeferred<PairingOutcome>? = null,
+                        existingService: Service? = null): Bundle {
         ManagementPolicy.validateOperation(kind, args.keySet().associateWith { @Suppress("DEPRECATION") args.get(it) })
         if (kind == "pair") {
             require(Build.VERSION.SDK_INT >= 30) { "unsupported" }
@@ -126,6 +165,8 @@ object BackendManagement {
             activeKind = kind
             output.setLength(0)
             ++generation
+            notificationPairing = completion?.let { NotificationPairingRequest(generation, it) }
+            generation
         }
         val intent = Intent(application, BackendControlService::class.java)
             .putExtra("kind", kind).putExtra("ticket", ticket)
@@ -134,16 +175,79 @@ object BackendManagement {
         if (kind == "pair") intent.putExtra("port", args.getInt("port"))
             .putExtra("code", args.getString("code"))
         try {
-            if (Build.VERSION.SDK_INT >= 26) application.startForegroundService(intent)
+            if (existingService == null) AdbPairingService.stopSearch(application)
+            if (existingService != null) run(existingService, intent, 0, stopWhenDone = false)
+            else if (Build.VERSION.SDK_INT >= 26) application.startForegroundService(intent)
             else application.startService(intent)
         } catch (e: Exception) {
-            synchronized(lock) { busy = false; operation = "error"; errorCode = "foreground_start_denied" }
+            synchronized(lock) {
+                busy = false
+                operation = "error"
+                errorCode = "foreground_start_denied"
+                notificationPairing?.result?.complete(PairingOutcome(false, errorCode))
+                notificationPairing = null
+            }
             throw e
         }
-        return snapshot()
+        return snapshot().apply { putLong("operationId", ticket) }
     }
 
-    internal fun run(service: Service, intent: Intent, startId: Int) {
+    internal fun pairFromNotification(service: Service, port: Int, code: String): NotificationPairingRequest {
+        val result = CompletableDeferred<PairingOutcome>()
+        val reply = enqueue("pair", Bundle().apply {
+            putInt("port", port)
+            putString("code", code)
+        }, result, service)
+        return NotificationPairingRequest(reply.getLong("operationId"), result)
+    }
+
+    internal fun cancelNotificationPairing(ticket: Long) {
+        val handles = synchronized(lock) {
+            if (!busy || generation != ticket || activeKind != "pair") return
+            operation = "cancelling"
+            activeJob to pairing
+        }
+        handles.first?.cancel()
+        handles.second?.cancel()
+    }
+
+    private fun wirelessDebugging(): Boolean? = if (Build.VERSION.SDK_INT < 30) null else runCatching {
+        when (Settings.Global.getString(application.contentResolver, "adb_wifi_enabled")) {
+            "1" -> true
+            "0" -> false
+            else -> null
+        }
+    }.getOrNull()
+
+    private fun refreshConnection(force: Boolean = false) {
+        val wireless = wirelessDebugging()
+        val ticket = synchronized(lock) {
+            if (force) accessCheckedAt = 0
+            if (wireless != lastWirelessSetting) {
+                lastWirelessSetting = wireless
+                accessCheckedAt = 0
+                adbAccess = "unknown"
+            }
+            if (busy || ManagementPolicy.notificationPairingActive(AdbPairingService.state) || accessChecking ||
+                (accessCheckedAt != 0L && SystemClock.elapsedRealtime() - accessCheckedAt < 30_000)) return
+            accessChecking = true
+            adbAccess = "checking"
+            generation
+        }
+        scope.launch {
+            val status = try { BackendRecovery.probeAdbAccess() }
+                catch (_: Exception) { "unknown" }
+            synchronized(lock) {
+                accessChecking = false
+                if (generation == ticket && lastWirelessSetting == wireless) {
+                    adbAccess = status
+                    accessCheckedAt = SystemClock.elapsedRealtime()
+                }
+            }
+        }
+    }
+
+    internal fun run(service: Service, intent: Intent, startId: Int, stopWhenDone: Boolean = true) {
         val ticket = intent.getLongExtra("ticket", -1)
         val task = scope.launch {
             try {
@@ -161,11 +265,21 @@ object BackendManagement {
                     client.use { check(it.start()) { "pairing_failed" } }
                     currentCoroutineContext().ensureActive()
                     RecoverySettings.prefs.edit().putLong("management_last_paired", System.currentTimeMillis()).apply()
-                    synchronized(lock) { operation = "paired" }
+                    synchronized(lock) {
+                        operation = "paired"
+                        adbAccess = "unknown"
+                        accessCheckedAt = 0
+                    }
                 } else {
                     BackendRecovery.startManual(intent.getBooleanExtra("root", false),
                         restart = intent.getBooleanExtra("restart", false), output = ::appendOutput)
-                    synchronized(lock) { operation = "running" }
+                    synchronized(lock) {
+                        operation = "running"
+                        if (!intent.getBooleanExtra("root", false)) {
+                            adbAccess = "authorized"
+                            accessCheckedAt = SystemClock.elapsedRealtime()
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 synchronized(lock) {
@@ -180,6 +294,7 @@ object BackendManagement {
                     }
                 }
             } finally {
+                intent.removeExtra("code")
                 pairing = null
             }
         }
@@ -191,9 +306,13 @@ object BackendManagement {
                     busy = false
                     activeJob = null
                     if (operation == "cancelling") operation = "cancelled"
+                    notificationPairing?.takeIf { it.ticket == ticket }?.let {
+                        it.result.complete(PairingOutcome(operation == "paired", errorCode))
+                        notificationPairing = null
+                    }
                 }
             }
-            service.stopSelf(startId)
+            if (stopWhenDone) service.stopSelf(startId)
         }
     }
 
@@ -226,6 +345,9 @@ object BackendManagement {
             })
             putInt("androidApi", Build.VERSION.SDK_INT)
             putBoolean("pairingSupported", Build.VERSION.SDK_INT >= 30)
+            wirelessDebugging()?.let { putBoolean("wirelessDebuggingEnabled", it) }
+            putBoolean("pairingNotificationsEnabled", Build.VERSION.SDK_INT >= 30 && AdbPairingService.notificationsEnabled(application))
+            putString("notificationPairingState", AdbPairingService.state)
             putBoolean("writeSecureSettings", application.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED)
             putBoolean("hotspotPermission", Build.VERSION.SDK_INT >= 30 &&
                 application.checkSelfPermission(ExperimentalWirelessSession.hotspotPermission()) == PackageManager.PERMISSION_GRANTED)
@@ -242,6 +364,8 @@ object BackendManagement {
                 putString("operation", operation)
                 putString("errorCode", errorCode)
                 putString("output", output.toString())
+                putString("adbAccess", adbAccess)
+                putLong("adbAccessCheckedAtElapsedMs", accessCheckedAt)
             }
             putLong("readAtElapsedMs", SystemClock.elapsedRealtime())
         }
