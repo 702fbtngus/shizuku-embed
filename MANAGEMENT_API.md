@@ -42,7 +42,7 @@ Do not run ContentResolver/Binder work on the main thread.
 | --- | --- | --- |
 | `snapshot` | none | Live Binder status, settings, operation and capabilities. |
 | `configure` | partial settings Bundle | Validates all fields before applying an update. |
-| `start` | optional boolean `root`, `restart` | Starts asynchronously; restart waits for the previous Binder to stop. |
+| `start` | optional boolean `root`, `restart` | Starts asynchronously through the native starter, which replaces any existing server. |
 | `pair` | integer `port`, six ASCII digits in string `code` | Pairs `127.0.0.1`; remote host addresses are not accepted. Does not automatically start. |
 | `cancel` | none | Cancels the active request. Cancelling pairing preserves an already running backend. Cancelling startup suspends automatic recovery. |
 | `stop` | none | Cancels the active request and asks the backend to exit; manual Start resumes recovery. |
@@ -67,11 +67,18 @@ Binder is still exiting; keep reading live status. A successful pairing timestam
 only records this API's last success and does not prove Android still trusts the
 key. Older notification-based pairing does not populate that timestamp.
 
-Restart captures the previous Binder and confirms its termination before starting
-again. The synchronous exit call can disconnect before its reply arrives. That
-exception is tolerated only after the captured server has actually stopped.
-Permission errors, cancellation and a server that stays alive still fail or cancel
-the request. Shutdown confirmation is bounded to five seconds.
+Start and Restart first establish their ADB connection or root shell, then run
+the native starter. That starter already kills the previous server with the same
+configured process identity before launching its replacement. ADB authentication
+failure therefore leaves the current server running. Successful startup requires
+a live Binder distinct from the one captured before the attempt, with a bounded
+15-second wait after the starter runs. Cancellation remains active throughout.
+
+The diagnostic report identifies this flow as `native replacement v2`. Failed
+manual starts include bounded stack-frame locations without argument values.
+Original manager and embedded host installations have separate app-private ADB
+keys. A successful ADB Start demonstrates an accepted connection for that attempt,
+independently of how another installation was paired.
 
 Operation error codes include `invalid_pairing_code`, `key_unavailable`,
 `permission_required`, `connection_timeout`, `pairing_failed`, `start_failed`.

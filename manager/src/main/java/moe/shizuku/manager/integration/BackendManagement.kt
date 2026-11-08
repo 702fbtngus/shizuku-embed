@@ -66,6 +66,7 @@ object BackendManagement {
         "report" -> snapshot().apply {
             putString("report", buildString {
                 appendLine("Shizuku Embed management v${ManagementPolicy.VERSION}")
+                appendLine("Startup implementation=native replacement v2")
                 appendLine(RecoverySettings.statusReport("No recovery attempt recorded."))
                 appendLine()
                 appendLine(RecoverySettings.experimentReport("No offline startup attempt recorded."))

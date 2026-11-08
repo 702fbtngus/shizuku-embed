@@ -3,115 +3,93 @@ package moe.shizuku.manager.recovery
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 
 class BackendRestartTest {
-    @Test fun lostExitReplyStillAllowsStartupAfterTheOldServerDies() = runBlocking {
-        var alive = true
-        val events = mutableListOf<String>()
-        stopBackendForRestart(
-            requestStop = {
-                events.add("exit")
-                alive = false
-                throw RuntimeException("Binder disconnected before the exit reply")
-            },
-            isPreviousAlive = { alive },
-            checkCurrent = {},
-        )
-        events.add("start")
-        assertEquals(listOf("exit", "start"), events)
+    private data class BinderToken(val alive: Boolean = true)
+
+    @Test fun firstStartAcceptsALiveNewBinder() = runBlocking {
+        val fresh = BinderToken()
+        val result = awaitBackendReplacement(null, { fresh }, { it.alive }, {})
+        assertSame(fresh, result)
     }
 
-    @Test fun lostReplyWaitsForActualDeathBeforeContinuing() = runBlocking {
-        var alive = true
-        val disconnected = CompletableDeferred<Unit>()
-        val dyingServer = launch {
-            disconnected.await()
-            delay(25)
-            alive = false
-        }
-        stopBackendForRestart(
-            requestStop = {
-                disconnected.complete(Unit)
-                throw RuntimeException("Remote exit")
-            },
-            isPreviousAlive = { alive },
-            checkCurrent = {},
-        )
-        assertFalse(alive)
-        dyingServer.join()
-    }
-
-    @Test fun normalExitAlsoWaitsForDeath() = runBlocking {
-        var alive = true
-        var checks = 0
-        stopBackendForRestart(
-            requestStop = {},
-            isPreviousAlive = {
-                checks++
-                if (checks >= 3) alive = false
-                alive
-            },
-            checkCurrent = {},
-        )
-        assertFalse(alive)
-    }
-
-    @Test fun anExitErrorIsPreservedWhenTheServerRemainsAlive() = runBlocking {
-        val failure = IllegalStateException("Exit rejected")
+    @Test fun anOldLiveBinderCannotCountAsSuccessfulRestart() = runBlocking {
+        val old = BinderToken()
         val result = runCatching {
-            stopBackendForRestart({ throw failure }, { true }, {}, timeoutMillis = 25)
+            awaitBackendReplacement(old, { old }, { it.alive }, {}, timeoutMillis = 25)
         }
-        assertSame(failure, result.exceptionOrNull())
+        assertEquals("The starter ran, but a replacement service did not connect.", result.exceptionOrNull()?.message)
     }
 
-    @Test fun aLiveServerTimesOutWithoutStartingASecondServer() = runBlocking {
-        var started = false
-        val result = runCatching {
-            stopBackendForRestart({}, { true }, {}, timeoutMillis = 25)
-            started = true
-        }
-        assertEquals("The previous service did not stop.", result.exceptionOrNull()?.message)
-        assertFalse(started)
+    @Test fun aDistinctBinderIsAcceptedEvenWhenItsValuesMatchTheOldOne() = runBlocking {
+        val old = BinderToken()
+        val fresh = BinderToken()
+        assertEquals(old, fresh)
+        assertNotSame(old, fresh)
+        assertSame(fresh, awaitBackendReplacement(old, { fresh }, { it.alive }, {}))
     }
 
-    @Test fun cancellationDuringShutdownCannotContinueToStartup() = runBlocking {
-        val stopping = CompletableDeferred<Unit>()
-        var started = false
+    @Test fun waitsThroughAnOldBinderAndTheDisconnectedInterval() = runBlocking {
+        val old = BinderToken()
+        val fresh = BinderToken()
+        val reads = listOf(old, null, fresh).iterator()
+        val result = awaitBackendReplacement(old, { reads.next() }, { it.alive }, {})
+        assertSame(fresh, result)
+    }
+
+    @Test fun oldBinderLivenessIsNeverQueriedDuringReplacement() = runBlocking {
+        val old = BinderToken()
+        val fresh = BinderToken()
+        val reads = listOf(old, fresh).iterator()
+        val result = awaitBackendReplacement(old, { reads.next() }, { binder ->
+            check(binder !== old) { "A dead previous Binder must not receive another call" }
+            binder.alive
+        }, {})
+        assertSame(fresh, result)
+    }
+
+    @Test fun aNewButDeadBinderCannotCountAsSuccess() = runBlocking {
+        val dead = BinderToken(alive = false)
+        val fresh = BinderToken()
+        val reads = listOf(dead, fresh).iterator()
+        assertSame(fresh, awaitBackendReplacement(null, { reads.next() }, { it.alive }, {}))
+    }
+
+    @Test fun cancellationWhileWaitingCannotReportSuccessfulRestart() = runBlocking {
+        val old = BinderToken()
+        val waiting = CompletableDeferred<Unit>()
+        var completed = false
         val job = launch {
-            stopBackendForRestart({ stopping.complete(Unit) }, { true }, {})
-            started = true
+            awaitBackendReplacement(old, {
+                waiting.complete(Unit)
+                old
+            }, { it.alive }, {})
+            completed = true
         }
-        stopping.await()
+        waiting.await()
         job.cancelAndJoin()
         assertTrue(job.isCancelled)
-        assertFalse(started)
+        assertFalse(completed)
     }
 
-    @Test fun explicitCancellationAndPermissionErrorsAreNeverSuppressed() = runBlocking {
+    @Test fun explicitCancellationAndPermissionFailurePropagate() = runBlocking {
         for (failure in listOf(CancellationException("Cancelled"), SecurityException("Not authorized"))) {
-            var alive = true
             val result = runCatching {
-                stopBackendForRestart(
-                    requestStop = {
-                        alive = false
-                        throw failure
-                    },
-                    isPreviousAlive = { alive },
-                    checkCurrent = {},
-                )
+                awaitBackendReplacement<BinderToken>(null, { throw failure }, { it.alive }, {})
             }
             assertSame(failure, result.exceptionOrNull())
         }
     }
 
-    @Test fun alreadyDeadServerNeedsNoExitRequest() = runBlocking {
-        var requested = false
-        stopBackendForRestart({ requested = true }, { false }, {})
-        assertFalse(requested)
+    @Test fun aSupersededOperationCannotAcceptAnAlreadyAvailableNewBinder() = runBlocking {
+        val cancelled = CancellationException("Superseded")
+        val result = runCatching {
+            awaitBackendReplacement(null, { BinderToken() }, { it.alive }, { throw cancelled })
+        }
+        assertSame(cancelled, result.exceptionOrNull())
     }
 }

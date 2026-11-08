@@ -141,16 +141,7 @@ object BackendRecovery {
             retry.reset()
             RecoverySettings.trigger("manual")
             RecoverySettings.resetExperiment()
-            if (restart && Shizuku.pingBinder()) {
-                val previousBinder = Shizuku.getBinder()
-                output("Stopping the previous service...")
-                stopBackendForRestart(
-                    requestStop = { Shizuku.exit() },
-                    isPreviousAlive = { previousBinder?.pingBinder() == true },
-                    checkCurrent = { checkCurrent(ticket) },
-                )
-                output("The previous service stopped. Starting again...")
-            }
+            if (restart) output("Restart requested. Preparing the native server replacement...")
             start(root, host, port, true, ticket, output)
         } catch (e: CancellationException) {
             throw e
@@ -158,6 +149,10 @@ object BackendRecovery {
             if (ticket == generation.get()) {
                 RecoverySettings.prefs.edit().putBoolean(RecoverySettings.PAUSED, true).apply()
                 RecoverySettings.status("Manual start failed. Check pairing and start again. ${e.message}")
+                output("Startup failed (${e.javaClass.simpleName}).")
+                e.stackTrace.take(6).forEach { frame ->
+                    output("  at ${frame.className}.${frame.methodName}(${frame.fileName}:${frame.lineNumber})")
+                }
             }
             throw e
         } finally {
@@ -229,6 +224,7 @@ object BackendRecovery {
 
     private suspend fun startServer(root: Boolean, host: String?, port: Int, manual: Boolean,
                                     ticket: Long, output: (String) -> Unit) {
+        val previousBinder = Shizuku.getBinder()
         if (!root && !application.getSystemService(UserManager::class.java).isUserUnlocked) {
             throw UserLockedException()
         }
@@ -250,8 +246,10 @@ object BackendRecovery {
             } catch (e: Exception) {
                 throw AdbKeyException(e)
             }
+            output("Connecting to authenticated ADB...")
             var client = connect(key, host, port, manual, ticket, output)
             try {
+                output("ADB connection authenticated.")
                 if (RecoverySettings.tcpEnabled && (client.isTls || RecoverySettings.prefs.getInt("recovery_last_port", -1) != RecoverySettings.port)) {
                     val tcpPort = RecoverySettings.port
                     activeExperiment?.stopNudging()
@@ -286,14 +284,13 @@ object BackendRecovery {
                 activeClient = null
             }
         }
-        output("Waiting for the service binder…")
-        val deadline = SystemClock.elapsedRealtime() + 15_000
-        while (!Shizuku.pingBinder() && SystemClock.elapsedRealtime() < deadline) {
-            checkCurrent(ticket)
-            delay(100)
-        }
-        checkCurrent(ticket)
-        if (!Shizuku.pingBinder()) throw ServerStartException("The starter ran, but the service did not connect.")
+        output("Waiting for the replacement service binder…")
+        awaitBackendReplacement(
+            previous = previousBinder,
+            current = { Shizuku.getBinder() },
+            isAlive = { it.isBinderAlive },
+            checkCurrent = { checkCurrent(ticket) },
+        )
         recordRunning()
         output("Service started. This window will close in 3 seconds.")
     }
