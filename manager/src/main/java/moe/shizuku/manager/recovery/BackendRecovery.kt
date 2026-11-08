@@ -104,14 +104,16 @@ object BackendRecovery {
         RecoverySettings.prefs.edit().putBoolean(RecoverySettings.STOPPED, true)
             .putBoolean(RecoverySettings.BOOT_PENDING, false).apply()
         if (mutex.isLocked) stopLateBinderUntil = SystemClock.elapsedRealtime() + 30_000
-        generation.incrementAndGet()
+        val ticket = generation.incrementAndGet()
         activeExperiment?.cancel()
         activeClient?.close()
         RecoverySettings.status("Stopped by user. Start manually to resume recovery.")
         RecoveryService.refresh(application)
         scope.launch {
             mutex.lock()
-            try { runCatching { Shizuku.exit() } } finally { mutex.unlock() }
+            try {
+                if (generation.get() == ticket && RecoverySettings.stopped) runCatching { Shizuku.exit() }
+            } finally { mutex.unlock() }
         }
     }
 
@@ -124,7 +126,8 @@ object BackendRecovery {
     }
 
     suspend fun startManual(root: Boolean, host: String? = null, port: Int = 0,
-                            output: (String) -> Unit) {
+                            restart: Boolean = false, output: (String) -> Unit) {
+        currentCoroutineContext().ensureActive()
         val ticket = generation.incrementAndGet()
         activeExperiment?.cancel()
         activeClient?.close()
@@ -138,6 +141,16 @@ object BackendRecovery {
             retry.reset()
             RecoverySettings.trigger("manual")
             RecoverySettings.resetExperiment()
+            if (restart && Shizuku.pingBinder()) {
+                output("Stopping the previous service...")
+                Shizuku.exit()
+                val deadline = SystemClock.elapsedRealtime() + 5000
+                while (Shizuku.pingBinder() && SystemClock.elapsedRealtime() < deadline) {
+                    checkCurrent(ticket)
+                    delay(50)
+                }
+                if (Shizuku.pingBinder()) throw ServerStartException("The previous service did not stop.")
+            }
             start(root, host, port, true, ticket, output)
         } catch (e: CancellationException) {
             throw e

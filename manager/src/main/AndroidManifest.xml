@@ -71,6 +71,9 @@
         tools:remove="android:appComponentFactory"
         tools:targetApi="33">
 
+        <service android:name="moe.shizuku.manager.integration.BackendControlService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-requested local ADB pairing and privileged backend startup" />
+        </service>
         <activity
             android:name=".MainActivity"
             android:banner="@mipmap/banner"

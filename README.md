@@ -1,8 +1,9 @@
 # Shizuku Embed
 
-Embed Shizuku's native manager UI, wireless ADB pairing, starter and privileged
-server in an Android application. The consuming app supplies its identity and
-opens the manager from its own UI.
+Embed Shizuku's pairing, startup, recovery and privileged backend in an Android
+application. Build a management screen in your own design system using the
+host-UID-only management API. The original native manager remains available as
+an optional interface for consumers that want to reuse it.
 
 This is a community-maintained fork of [RikkaApps/Shizuku](https://github.com/RikkaApps/Shizuku).
 The original authors retain their copyright and attribution. Development of the
@@ -18,9 +19,33 @@ embedding layer takes place on `main` in [shizuku-embed](https://github.com/702f
 - Composite-build test hosts with Debug and optimized Release APK checks.
 - Upstream `manager`, `server`, `starter`, `shell` and nested `api` source history.
 
-Host authentication, application policy and permission-recovery decisions belong
-in the consuming application. The embedding library manages Shizuku's UI and
-server lifecycle. Its provider retries avoid force-stopping the host package.
+Host authentication, presentation, consent and application-specific permission
+recovery belong in the consuming application. Shizuku Embed owns pairing keys,
+backend lifecycle, transport selection and recovery state in its manager process.
+Its provider retries avoid force-stopping the host package.
+
+## Recommended integration: your UI, shared engine
+
+Use `EmbeddedShizuku.manage(context, command, arguments)` from a worker thread.
+The versioned API reads status, validates settings updates, pairs the local device,
+and starts/stops the backend without opening any manager Activity. User-requested
+pairing and startup operations run in a short-lived foreground service; leaving
+the consuming screen does not cancel them. Hosts can poll immutable snapshots
+while their authenticated management screen is visible.
+
+The default manager and host-designed screens reuse the same pairing client,
+`BackendRecovery`, settings and recovery services. Do not copy ADB startup logic
+or write the manager's private preferences from another process.
+
+See [MANAGEMENT_API.md](MANAGEMENT_API.md) for the API contract, cancellation,
+consent requirements and a native UI integration example. Flutter, Compose and
+Views are host-side choices; this repository has no dependency on a particular
+host application or UI framework.
+
+The current `embedded` artifact still packages the original manager screens and
+resources. Using the backend API does not open them or require adopting their
+theme. Separate core/UI artifacts that can omit these classes and resources at
+build time remain future work; this release does not claim that separation.
 
 ## Use in an application
 

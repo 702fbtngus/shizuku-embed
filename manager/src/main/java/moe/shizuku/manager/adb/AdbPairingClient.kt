@@ -8,6 +8,7 @@ import java.io.Closeable
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.net.Socket
+import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import javax.net.ssl.SSLSocket
@@ -171,7 +172,8 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
         Stopped
     }
 
-    private lateinit var socket: Socket
+    @Volatile private var socket: Socket? = null
+    @Volatile private var cancelled = false
     private lateinit var inputStream: DataInputStream
     private lateinit var outputStream: DataOutputStream
 
@@ -201,11 +203,16 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
     }
 
     private fun setupTlsConnection() {
-        socket = Socket(host, port)
-        socket.tcpNoDelay = true
+        val connection = Socket()
+        socket = connection
+        check(!cancelled) { "Pairing cancelled." }
+        connection.connect(InetSocketAddress(host, port), 10000)
+        connection.soTimeout = 10000
+        connection.tcpNoDelay = true
 
         val sslContext = key.sslContext
-        val sslSocket = sslContext.socketFactory.createSocket(socket, host, port, true) as SSLSocket
+        val sslSocket = sslContext.socketFactory.createSocket(connection, host, port, true) as SSLSocket
+        sslSocket.soTimeout = 10000
         sslSocket.startHandshake()
         Log.d(TAG, "Handshake succeeded.")
 
@@ -285,6 +292,9 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
         return true
     }
 
+    /** Interrupt socket I/O; native pairing state is released only by the worker's close(). */
+    fun cancel() { cancelled = true; runCatching { socket?.close() } }
+
     override fun close() {
         try {
             inputStream.close()
@@ -295,11 +305,11 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
         } catch (e: Throwable) {
         }
         try {
-            socket.close()
+            socket?.close()
         } catch (e: Exception) {
         }
 
-        if (state != State.Ready) {
+        if (::pairingContext.isInitialized) {
             pairingContext.destroy()
         }
     }

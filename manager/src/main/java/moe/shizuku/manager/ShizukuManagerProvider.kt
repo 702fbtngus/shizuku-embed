@@ -14,6 +14,7 @@ import rikka.shizuku.server.ktx.workerHandler
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import moe.shizuku.manager.integration.BackendManagement
 
 class ShizukuManagerProvider : ShizukuProvider() {
 
@@ -31,6 +32,12 @@ class ShizukuManagerProvider : ShizukuProvider() {
     }
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
+        if (method == BackendManagement.METHOD) {
+            if (!rikka.shizuku.common.BuildConfig.EMBEDDED_MANAGER || Binder.getCallingUid() != Process.myUid()) {
+                throw SecurityException("Embedded management requires the host application UID.")
+            }
+            return BackendManagement.call(arg, extras ?: Bundle())
+        }
         if (method == METHOD_GET_HOST_BINDER) {
             if (!rikka.shizuku.common.BuildConfig.EMBEDDED_MANAGER ||
                 Binder.getCallingUid() != Process.myUid()) {

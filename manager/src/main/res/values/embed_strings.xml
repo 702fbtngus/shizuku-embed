@@ -1,0 +1,5 @@
+<resources>
+    <string name="embed_control_channel">Shizuku operations</string>
+    <string name="embed_control_title">Shizuku is connecting</string>
+    <string name="embed_control_description">A requested pairing or startup operation is in progress.</string>
+</resources>

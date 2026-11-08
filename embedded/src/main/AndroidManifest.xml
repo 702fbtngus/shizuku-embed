@@ -19,6 +19,9 @@
     <permission android:name="${applicationId}.shizuku.permission.API_V23" android:description="@string/permission_description" android:icon="@drawable/ic_system_icon" android:label="@string/permission_label" android:permissionGroup="${applicationId}.shizuku.permission-group.API" android:protectionLevel="dangerous" />
     <uses-permission android:name="${applicationId}.shizuku.permission.API_V23" tools:node="remove" />
     <application tools:ignore="GoogleAppIndexingWarning">
+        <service android:name="moe.shizuku.manager.integration.BackendControlService" android:exported="false" android:process=":shizuku" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-requested local ADB pairing and privileged backend startup" />
+        </service>
         <activity android:name="moe.shizuku.manager.MainActivity" android:label="@string/app_name" android:exported="false" android:process=":shizuku" android:theme="@style/AppTheme">
             </activity>
         <activity android:name="moe.shizuku.manager.management.ApplicationManagementActivity" android:label="@string/home_app_management_title" android:process=":shizuku" android:theme="@style/AppTheme" />
