@@ -347,12 +347,19 @@ object BackendRecovery {
         }
         if (!experimentAllowed) output("Waiting for wireless debugging. Connect Wi-Fi and enable wireless debugging if needed.")
         val discoveredPort = AtomicInteger(-1)
+        // Capture this attempt so late NSD callbacks cannot write into a later experiment.
+        val experiment = activeExperiment
         val mdns = AdbMdns(application, AdbMdns.TLS_CONNECT) {
             if (RecoveryPolicy.validPort(it)) discoveredPort.set(it)
         }
+        mdns.diagnostic = { experiment?.record(it) }
         val window = if (experimentAllowed) RecoveryPolicy.EXPERIMENT_WINDOW_MS else 8_000L
         val deadline = SystemClock.elapsedRealtime() + window
         var lastFailure: String? = null
+        var lastPortState = ""
+        var nextStateLogAt = 0L
+        var connectionAttempts = 0
+        var listeningChecks = 0
         try {
             // Start discovery after the temporary interface has settled.
             mdns.start()
@@ -360,9 +367,23 @@ object BackendRecovery {
                 checkCurrent(ticket)
                 activeExperiment?.writeFailure?.let { throw ExperimentalPermissionException(it) }
                 val direct = SystemProperties.getInt("service.adb.tls.port", -1)
+                val portState = "tlsPort=$direct discoveredPort=${discoveredPort.get()}"
+                val now = SystemClock.elapsedRealtime()
+                if (portState != lastPortState || now >= nextStateLogAt) {
+                    experiment?.record("ADB state: $portState " +
+                        "tcpPort=${EnvironmentUtils.getAdbTcpPort()} " +
+                        "wirelessSetting=${Settings.Global.getInt(application.contentResolver, "adb_wifi_enabled", 0)} " +
+                        "wifiConnected=${ExperimentalWirelessSession.hasWifiConnection(application)} " +
+                        "listeningChecks=$listeningChecks connectionAttempts=$connectionAttempts.")
+                    lastPortState = portState
+                    nextStateLogAt = now + 5_000
+                }
                 val candidates = listOf(direct, discoveredPort.get()).filter(RecoveryPolicy::validPort).distinct()
                 for (candidate in candidates) {
+                    listeningChecks += 1
                     if (!listening(candidate)) continue
+                    connectionAttempts += 1
+                    experiment?.record("ADB listener reachable on port $candidate; authenticating (attempt $connectionAttempts).")
                     try {
                         val client = open(key, "127.0.0.1", candidate, manual, ticket)
                         activeExperiment?.record("Authenticated ADB endpoint on port $candidate.")
@@ -376,11 +397,15 @@ object BackendRecovery {
                     } catch (e: Exception) {
                         // Android can close the experimental TLS endpoint while a handshake is in flight.
                         lastFailure = "${e.javaClass.simpleName}: ${e.message}"
+                        experiment?.record("ADB connection failed on port $candidate: $lastFailure")
                     }
                 }
                 delay(125)
             }
-        } finally { runCatching { mdns.stop() } }
+        } finally {
+            runCatching { mdns.stop() }
+            experiment?.record("Discovery finished: listeningChecks=$listeningChecks connectionAttempts=$connectionAttempts lastFailure=$lastFailure.")
+        }
         checkCurrent(ticket)
         if (experimentAllowed) error("Offline startup timed out. Android may require a Wi-Fi connection. Last connection failure=$lastFailure")
         if (offline) error("No ADB endpoint. Offline experiment is cooling down or reached its three-attempt limit. Connect Wi-Fi or start manually.")

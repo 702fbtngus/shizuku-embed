@@ -33,7 +33,7 @@ internal class ExperimentalWirelessSession(private val context: Context) {
     private val lease = HotspotLease()
     private val started = SystemClock.elapsedRealtime()
     private val boot = RecoverySettings.bootCount
-    private val diagnostics = StringBuilder("Experimental offline startup\n")
+    private val diagnostics = StringBuilder("Experimental offline startup diagnostics v2\n")
         .appendLine("Started ${RecoverySettings.formatTime(System.currentTimeMillis())}; boot=$boot; uptimeMs=$started")
         .appendLine("Trigger=${RecoverySettings.lastTrigger}")
     private var nudger: Job? = null
@@ -46,6 +46,7 @@ internal class ExperimentalWirelessSession(private val context: Context) {
         checkPrerequisites(context)
         record("${Build.MANUFACTURER} ${Build.MODEL}; API ${Build.VERSION.SDK_INT}; package=${context.packageName}.")
         record("WSS and hotspot permission granted; TCP on start=${RecoverySettings.tcpEnabled}.")
+        record("Before hotspot: wifiConnected=${hasWifiConnection(context)} wirelessSetting=${Settings.Global.getInt(context.contentResolver, "adb_wifi_enabled", 0)}.")
         saveLog()
         output("Requesting a temporary local-only hotspot for offline startup...")
         val hotspot = requestHotspot()

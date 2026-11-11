@@ -18,6 +18,9 @@ class AdbMdns(
     private val observer: Observer<Int>
 ) {
 
+    /** Optional bounded-report sink supplied by an active recovery attempt. */
+    var diagnostic: ((String) -> Unit)? = null
+
     private var registered = false
     private var running = false
     private var serviceName: String? = null
@@ -42,6 +45,7 @@ class AdbMdns(
 
     private fun onDiscoveryStart() {
         registered = true
+        diagnostic?.invoke("mDNS discovery started ($serviceType).")
         // A bounded recovery attempt may have stopped before discovery started.
         if (!running) runCatching { nsdManager.stopServiceDiscovery(listener) }
     }
@@ -52,6 +56,7 @@ class AdbMdns(
 
     private fun onServiceFound(info: NsdServiceInfo) {
         if (!running) return
+        diagnostic?.invoke("mDNS service found ($serviceType).")
         nsdManager.resolveService(info, ResolveListener(this))
     }
 
@@ -60,15 +65,17 @@ class AdbMdns(
     }
 
     private fun onServiceResolved(resolvedService: NsdServiceInfo) {
-        if (running && NetworkInterface.getNetworkInterfaces()
-                .asSequence()
-                .any { networkInterface ->
-                    networkInterface.inetAddresses
-                        .asSequence()
-                        .any { resolvedService.host.hostAddress == it.hostAddress }
-                }
-            && isPortAvailable(resolvedService.port)
-        ) {
+        if (!running) return
+        val local = NetworkInterface.getNetworkInterfaces()
+            .asSequence()
+            .any { networkInterface ->
+                networkInterface.inetAddresses
+                    .asSequence()
+                    .any { resolvedService.host.hostAddress == it.hostAddress }
+            }
+        val occupied = local && isPortAvailable(resolvedService.port)
+        diagnostic?.invoke("mDNS resolved port=${resolvedService.port} local=$local occupied=$occupied.")
+        if (occupied) {
             serviceName = resolvedService.serviceName
             observer.onChanged(resolvedService.port)
         }
@@ -92,6 +99,7 @@ class AdbMdns(
 
         override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
             Log.v(TAG, "onStartDiscoveryFailed: $serviceType, $errorCode")
+            adbMdns.diagnostic?.invoke("mDNS discovery failed ($serviceType), error=$errorCode.")
         }
 
         override fun onDiscoveryStopped(serviceType: String) {
@@ -118,7 +126,9 @@ class AdbMdns(
     }
 
     internal class ResolveListener(private val adbMdns: AdbMdns) : NsdManager.ResolveListener {
-        override fun onResolveFailed(nsdServiceInfo: NsdServiceInfo, i: Int) {}
+        override fun onResolveFailed(nsdServiceInfo: NsdServiceInfo, i: Int) {
+            adbMdns.diagnostic?.invoke("mDNS resolution failed, error=$i.")
+        }
 
         override fun onServiceResolved(nsdServiceInfo: NsdServiceInfo) {
             adbMdns.onServiceResolved(nsdServiceInfo)
