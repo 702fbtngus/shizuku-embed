@@ -15,7 +15,7 @@ object EmbeddedShizuku {
      */
     @JvmStatic
     fun manage(context: Context, command: String, arguments: Bundle = Bundle()): Bundle {
-        require(command in setOf("snapshot", "refresh_connection", "configure", "start", "pair", "pair_notification", "cancel_pair_notification", "cancel", "stop", "report")) { "unknown_command" }
+        require(command in setOf("snapshot", "refresh_connection", "configure", "start", "pair", "pair_notification", "cancel_pair_notification", "cancel", "stop", "report", "uninstall_protection")) { "unknown_command" }
         return context.contentResolver.call(Uri.parse("content://${context.packageName}.shizuku"),
             BackendManagement.METHOD, command, arguments) ?: error("management_unavailable")
     }

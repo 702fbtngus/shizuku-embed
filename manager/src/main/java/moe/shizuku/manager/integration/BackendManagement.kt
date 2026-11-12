@@ -5,6 +5,8 @@ import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.IPackageManager
+import android.os.Process
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -30,6 +32,8 @@ import moe.shizuku.manager.recovery.ExperimentalWirelessSession
 import moe.shizuku.manager.recovery.RecoveryService
 import moe.shizuku.manager.recovery.RecoverySettings
 import rikka.shizuku.Shizuku
+import rikka.shizuku.ShizukuBinderWrapper
+import rikka.shizuku.SystemServiceHelper
 
 /** Manager-process implementation. No host identity, Flutter or Activity dependency. */
 object BackendManagement {
@@ -62,6 +66,7 @@ object BackendManagement {
             snapshot()
         }
         "configure" -> configure(args)
+        "uninstall_protection" -> uninstallProtection(args)
         "start", "pair" -> enqueue(command, args)
         "pair_notification" -> {
             require(args.isEmpty) { "invalid_arguments" }
@@ -112,6 +117,35 @@ object BackendManagement {
             }.takeLast(24000))
         }
         else -> throw IllegalArgumentException("unknown_command")
+    }
+
+    /** Host UID only (enforced by the provider), scoped to this APK and Android user. */
+    private fun uninstallProtection(args: Bundle): Bundle {
+        require(args.keySet().all { it == "blocked" }) { "invalid_arguments" }
+        @Suppress("DEPRECATION")
+        require(!args.containsKey("blocked") || args.get("blocked") is Boolean) { "invalid_arguments" }
+        if (!Shizuku.pingBinder()) return Bundle().apply { putBoolean("available", false) }
+        val pm = IPackageManager.Stub.asInterface(
+            ShizukuBinderWrapper(SystemServiceHelper.getSystemService("package")))
+        // Resolve the device's hidden API at runtime. Transaction numbers differ by Android version.
+        val api = Class.forName("android.content.pm.IPackageManager")
+        val packageName = application.packageName
+        val userId = Process.myUid() / 100_000
+        if (args.containsKey("blocked")) {
+            val success = api.getMethod("setBlockUninstallForUser", String::class.java,
+                Boolean::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                .invoke(pm, packageName, args.getBoolean("blocked"), userId) as Boolean
+            check(success) { "uninstall_protection_rejected" }
+        }
+        val blocked = api.getMethod("getBlockUninstallForUser", String::class.java,
+            Int::class.javaPrimitiveType).invoke(pm, packageName, userId) as Boolean
+        check(!args.containsKey("blocked") || blocked == args.getBoolean("blocked")) {
+            "uninstall_protection_not_applied"
+        }
+        return Bundle().apply {
+            putBoolean("available", true)
+            putBoolean("blocked", blocked)
+        }
     }
 
     private fun configure(args: Bundle): Bundle {

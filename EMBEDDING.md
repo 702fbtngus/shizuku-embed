@@ -245,3 +245,14 @@ full status with current boot/unlock state, startup policy and readiness trigger
 Offline startup diagnostics records its start time, boot count and trigger. The
 viewer labels reports from another boot, and labels legacy reports whose boot
 identity is unknown. Compare both reports from the same boot during device tests.
+
+### Host uninstall protection
+
+The host-UID-only `uninstall_protection` management command queries the system's
+uninstall block for the host APK and its Android user. Pass a boolean `blocked`
+to apply or clear it. The reply contains `available` and, when the server is
+running, the verified `blocked` state. This uses the device's hidden
+`IPackageManager` API through Shizuku and can fail under OEM permission policy.
+The block is stored by Android and can outlive the Shizuku server. Hosts must
+retain a way to start Shizuku and clear the block before uninstalling. Handle
+errors without presenting an unverified change as successful.
