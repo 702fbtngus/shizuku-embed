@@ -137,6 +137,7 @@ class AdbPairingService : Service() {
         discovery = null
         session = null
         state = if (success) "paired" else "error"
+        BackendRecovery.closeWirelessDebuggingWhenIdle()
         stopForeground(STOP_FOREGROUND_REMOVE)
         val title = getString(if (success) R.string.notification_adb_pairing_succeed_title else R.string.notification_adb_pairing_failed_title)
         val text = when {
@@ -197,6 +198,7 @@ class AdbPairingService : Service() {
             if (ManagementPolicy.notificationPairingActive(state)) state = "idle"
             instance = null
         }
+        BackendRecovery.closeWirelessDebuggingWhenIdle()
         super.onDestroy()
     }
 

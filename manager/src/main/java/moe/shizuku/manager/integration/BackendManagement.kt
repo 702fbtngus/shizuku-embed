@@ -56,6 +56,10 @@ object BackendManagement {
     private var accessChecking = false
     private var lastWirelessSetting: Boolean? = null
 
+    internal fun pairingActive(): Boolean = synchronized(lock) {
+        busy && activeKind == "pair" || ManagementPolicy.notificationPairingActive(AdbPairingService.state)
+    }
+
     fun call(command: String?, args: Bundle): Bundle = when (command) {
         "snapshot" -> {
             refreshConnection()
@@ -346,6 +350,7 @@ object BackendManagement {
                     }
                 }
             }
+            BackendRecovery.closeWirelessDebuggingWhenIdle()
             if (stopWhenDone) service.stopSelf(startId)
         }
     }

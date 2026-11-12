@@ -29,6 +29,7 @@ import moe.shizuku.manager.adb.PreferenceAdbKeyStore
 import moe.shizuku.manager.application
 import moe.shizuku.manager.adb.AdbPairingService
 import moe.shizuku.manager.integration.ManagementPolicy
+import moe.shizuku.manager.integration.BackendManagement
 import moe.shizuku.manager.starter.Starter
 import moe.shizuku.manager.utils.EnvironmentUtils
 import rikka.shizuku.Shizuku
@@ -66,6 +67,7 @@ object BackendRecovery {
                         recordRunning()
                     }
                 } finally { mutex.unlock() }
+                closeWirelessDebuggingWhenIdle()
                 RecoveryService.refresh(application)
             }
         }
@@ -102,6 +104,29 @@ object BackendRecovery {
         RecoverySettings.status("Running as ${if (uid == 0) "root" else "shell"}.")
     }
 
+    /** Wireless ADB is only needed to acquire the server, or while pairing. */
+    internal fun closeWirelessDebuggingWhenIdle() {
+        scope.launch {
+            mutex.lock()
+            try { closeWirelessDebugging() } finally { mutex.unlock() }
+        }
+    }
+
+    /** Caller holds the startup mutex so another start cannot enable ADB during cleanup. */
+    private fun closeWirelessDebugging() {
+        if (Build.VERSION.SDK_INT < 30 || activeClient != null || activeExperiment != null ||
+            BackendManagement.pairingActive() ||
+            application.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) != PackageManager.PERMISSION_GRANTED) return
+        runCatching {
+            val resolver = application.contentResolver
+            if (Settings.Global.getInt(resolver, "adb_wifi_enabled", 0) == 1) {
+                check(Settings.Global.putInt(resolver, "adb_wifi_enabled", 0))
+            }
+        }.onFailure {
+            android.util.Log.w("ShizukuRecovery", "Could not close idle wireless debugging", it)
+        }
+    }
+
     fun stop() {
         AdbPairingService.stopSearch(application)
         RecoverySettings.prefs.edit().putBoolean(RecoverySettings.STOPPED, true)
@@ -116,6 +141,7 @@ object BackendRecovery {
             mutex.lock()
             try {
                 if (generation.get() == ticket && RecoverySettings.stopped) runCatching { Shizuku.exit() }
+                closeWirelessDebugging()
             } finally { mutex.unlock() }
         }
     }
@@ -180,6 +206,7 @@ object BackendRecovery {
             if (!RecoverySettings.autoAllowed || ManagementPolicy.notificationPairingActive(AdbPairingService.state)) return
             if (Shizuku.pingBinder()) {
                 recordRunning()
+                closeWirelessDebugging()
                 return
             }
             val root = ShizukuSettings.getLastLaunchMode() == ShizukuSettings.LaunchMethod.ROOT
@@ -227,8 +254,12 @@ object BackendRecovery {
             if (activeExperiment != null) RecoverySettings.failedExperiment(SystemClock.elapsedRealtime())
             throw e
         } finally {
-            withContext(NonCancellable) { activeExperiment?.close() }
-            activeExperiment = null
+            withContext(NonCancellable) {
+                try { activeExperiment?.close() } finally {
+                    activeExperiment = null
+                    if (!root) closeWirelessDebugging()
+                }
+            }
         }
     }
 
